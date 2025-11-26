@@ -22,57 +22,31 @@
         import { getFirestore, doc, getDoc, setDoc, addDoc, onSnapshot, collection, query, serverTimestamp, orderBy, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // ==========================================
-        // 👇 CONFIGURATION SETUP (Hybrid) 👇
+        // 👇 FINAL CONFIGURATION (Aapki Keys Yahan Hain) 👇
         // ==========================================
         
-        // 1. GitHub/Live ke liye: Yahan apni asli keys daalein
-        // Jab aap GitHub par dalein, to is object ko bharein
         const manualConfig = {
-           // 1. GitHub/Live ke liye: Yahan apni asli keys daalein
-        const manualConfig = {
-            apiKey: "AIzaSyDmBGDRtxUt74omyAi6YH9BySWm7kUjpAU", 
+            apiKey: "AIzaSyDmBGDRtxUt74omyAi6YH9BySWm7kUjpAU",
             authDomain: "reseller-729f0.firebaseapp.com",
             projectId: "reseller-729f0",
             storageBucket: "reseller-729f0.firebasestorage.app",
             messagingSenderId: "225176781360",
             appId: "1:225176781360:web:acb5099ac84cd4da87e3f5"
         };
-        };
 
-        // 2. Logic to choose config
+        // ==========================================
+
         let firebaseConfig;
         let initialAuthToken = null;
-        let appId = 'my-shop-v1';
+        let appId = 'shop-live'; 
 
-        // Check if running in the AI Preview Environment
+        // Check environment
         if (typeof __firebase_config !== 'undefined') {
-            // Use internal config for Preview
             firebaseConfig = JSON.parse(__firebase_config);
             if (typeof __app_id !== 'undefined') appId = __app_id;
             if (typeof __initial_auth_token !== 'undefined') initialAuthToken = __initial_auth_token;
-            console.log("Using Preview Config");
         } else {
-            // Use manual config for GitHub/Live
             firebaseConfig = manualConfig;
-            console.log("Using Manual Config");
-        }
-
-        // ==========================================
-        
-        // Safety Check for "projectId" error
-        if (!firebaseConfig || !firebaseConfig.projectId) {
-            console.error("Firebase Config Error: projectId missing.");
-            document.body.innerHTML = `
-                <div style="display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;text-align:center;padding:20px;">
-                    <h1 style="color:red;font-size:24px;font-weight:bold;">Configuration Error</h1>
-                    <p>App ko <b>Project ID</b> nahi mili.</p>
-                    <p style="background:#eee;padding:10px;border-radius:8px;margin-top:10px;">
-                        Agar aap ise <b>GitHub</b> par chala rahe hain:<br>
-                        Code mein <code>manualConfig</code> ke andar apni Firebase details bharein.
-                    </p>
-                </div>
-            `;
-            throw new Error("projectId not provided");
         }
 
         const app = initializeApp(firebaseConfig);
@@ -91,11 +65,15 @@
                     userId = user.uid;
                     await checkUserProfile(userId);
                 } else {
-                    // Auth Flow
                     if (initialAuthToken) {
                         await signInWithCustomToken(auth, initialAuthToken);
                     } else {
-                        await signInAnonymously(auth);
+                        try {
+                            await signInAnonymously(auth);
+                        } catch (error) {
+                            console.error("Login Error:", error);
+                            alert("Login nahi ho pa raha. Kripya Firebase Console me 'Authentication > Sign-in method > Anonymous' enable karein.");
+                        }
                     }
                 }
             });
@@ -103,20 +81,15 @@
 
         const checkUserProfile = async (uid) => {
             try {
-                // Use consistent path structure for both environments
-                // Note: For GitHub live, make sure your Firestore rules allow access to 'users' collection
-                // or change this path to match your rules.
-                const userPath = typeof __firebase_config !== 'undefined' ? 
-                    ['artifacts', appId, 'users', uid, 'profile', 'data'] : // Preview Path
-                    ['users', uid]; // Live Path (simpler)
+                // Determine Path based on Environment
+                let userRef;
+                if (typeof __firebase_config !== 'undefined') {
+                    userRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'data');
+                } else {
+                    userRef = doc(db, 'users', uid);
+                }
 
-                // Helper to get doc ref based on path array
-                const getRef = (pathArr) => {
-                   if(pathArr.length > 2) return doc(db, ...pathArr);
-                   return doc(db, pathArr[0], pathArr[1]);
-                };
-
-                const docSnap = await getDoc(getRef(userPath));
+                const docSnap = await getDoc(userRef);
                 
                 if (docSnap.exists()) {
                     userProfile = docSnap.data();
@@ -128,8 +101,8 @@
                     showView('view-login-mobile');
                 }
             } catch (e) { 
-                console.error("Profile Load Error:", e);
-                // Fallback if permission error occurs (often happens if rules aren't set)
+                console.error("Profile Error:", e);
+                // Database Rules issue ho sakta hai, par login screen dikhate hain
                 showView('view-login-mobile');
             }
         };
@@ -139,13 +112,11 @@
             document.querySelectorAll('.user-photo-display').forEach(img => img.src = userProfile.photo || 'https://placehold.co/100');
         };
 
-        // --- HELPER FOR COLLECTIONS (Handles Paths) ---
-        const getCollectionRef = (colName) => {
+        // --- HELPER FOR COLLECTIONS ---
+        const getColRef = (colName) => {
              if (typeof __firebase_config !== 'undefined') {
-                 // Preview Path
                  return collection(db, 'artifacts', appId, 'public', 'data', colName);
              } else {
-                 // Live Path
                  return collection(db, colName);
              }
         };
@@ -157,7 +128,6 @@
                  return doc(db, 'users', userId);
             }
         };
-
 
         // --- LOGIN & OTP SIMULATION ---
         window.sendOtp = () => {
@@ -214,7 +184,7 @@
         };
 
         const startItemsListener = () => {
-            const q = query(getCollectionRef('items'), orderBy('createdAt', 'desc'));
+            const q = query(getColRef('items'), orderBy('createdAt', 'desc'));
             onSnapshot(q, (snap) => {
                 const list = document.getElementById('items-grid');
                 list.innerHTML = '';
@@ -237,18 +207,21 @@
                                 <h3 class="font-bold text-gray-800 truncate">${item.name}</h3>
                                 <p class="text-xs text-gray-500 mb-2">${item.category}</p>
                                 <div class="flex justify-between items-center mt-2">
-                                    <span class="text-xs text-gray-400">By: ${item.sellerName.split(' ')[0]}</span>
+                                    <span class="text-xs text-gray-400">By: ${item.sellerName ? item.sellerName.split(' ')[0] : 'User'}</span>
                                     <button class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">खरीदें</button>
                                 </div>
                             </div>`;
                         list.appendChild(el);
                     }
                 });
+            }, (error) => {
+                console.error("Items Error:", error);
+                if(error.code === 'permission-denied') alert("Database Rules Error: Please enable 'Start in Test Mode' in Firebase Firestore.");
             });
         };
 
         const startRequestsListener = () => {
-            const q = query(getCollectionRef('requests'), orderBy('createdAt', 'desc'));
+            const q = query(getColRef('requests'), orderBy('createdAt', 'desc'));
             onSnapshot(q, (snap) => {
                 const list = document.getElementById('items-grid');
                 list.innerHTML = '';
@@ -283,7 +256,7 @@
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = async () => {
-                await addDoc(getCollectionRef('items'), {
+                await addDoc(getColRef('items'), {
                     name: form['name'].value, price: Number(form['price'].value),
                     category: form['category'].value, description: form['desc'].value,
                     imageData: reader.result, sellerId: userId, sellerName: userName, sellerPhoto: userProfile.photo,
@@ -300,7 +273,7 @@
             e.preventDefault();
             const name = document.getElementById('req-name').value;
             const desc = document.getElementById('req-desc').value;
-            await addDoc(getCollectionRef('requests'), {
+            await addDoc(getColRef('requests'), {
                 itemName: name, description: desc,
                 requesterId: userId, requesterName: userName, requesterPhoto: userProfile.photo,
                 createdAt: serverTimestamp()
@@ -317,12 +290,11 @@
             let seller = {name:'Unknown', mobile:'Hidden', address:'Hidden', photo: ''};
             
             try {
-                const itemSnap = await getDoc(doc(getCollectionRef('items'), itemId));
+                const itemSnap = await getDoc(doc(getColRef('items'), itemId));
                 if(!itemSnap.exists()) return;
                 const item = itemSnap.data();
 
                 // Fetch Seller
-                // We need to construct seller path correctly based on env
                 let sellerRef;
                 if(typeof __firebase_config !== 'undefined') {
                     sellerRef = doc(db, 'artifacts', appId, 'users', sellerId, 'profile', 'data');
@@ -345,7 +317,7 @@
                 controls.innerHTML = '';
                 
                 if(dealsUnsub) dealsUnsub();
-                const q = query(getCollectionRef('deals'), where('itemId', '==', itemId));
+                const q = query(getColRef('deals'), where('itemId', '==', itemId));
                 
                 dealsUnsub = onSnapshot(q, (snap) => {
                     if (sellerId === userId) {
@@ -381,7 +353,7 @@
         };
 
         window.sendDealRequest = async (itemId) => {
-            await addDoc(getCollectionRef('deals'), {
+            await addDoc(getColRef('deals'), {
                 itemId, buyerId: userId, buyerName: userName, status: 'pending', createdAt: serverTimestamp()
             });
         };
@@ -396,20 +368,14 @@
             const time = document.getElementById('deal-time').value;
             const place = document.getElementById('deal-place').value;
             if(!time || !place) return;
-            // Note: In Preview we have nested paths, in Live simpler paths.
-            // But getCollectionRef handles 'deals' collection
-            // updateDoc needs a direct ref.
-            // For simplicity we fetch the ref using the same logic.
-            const colRef = getCollectionRef('deals');
+            
+            const colRef = getColRef('deals');
             await updateDoc(doc(colRef, dealId), { status: 'accepted', meetTime: time, meetPlace: place });
             document.getElementById('modal-logistics').classList.add('hidden');
         };
 
         const setupChat = (itemId) => {
             const chatDiv = document.getElementById('chat-messages');
-            // Path handling for chat subcollection is tricky in hybrid mode
-            // Preview: artifacts/../chats/ITEMID/messages
-            // Live: chats/ITEMID/messages
             let chatRef;
             if(typeof __firebase_config !== 'undefined') {
                  chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chats', itemId, 'messages');
@@ -623,5 +589,4 @@
     </div>
 
 </body>
-
 </html>
