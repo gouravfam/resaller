@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ऑनलाइन बाज़ार - Online Bazaar</title>
     
-    <!-- 1. Jasoos Code (Error Catcher) -->
+    <!-- Error Catcher (Hidden unless error) -->
     <script>
         window.onerror = function(message, source, lineno, colno, error) {
-            const errorBox = document.getElementById('error-box');
-            if(errorBox) {
-                errorBox.style.display = 'block';
-                document.getElementById('error-message').innerText = 
-                    "Error: " + message + "\nLine: " + lineno;
+            console.error("Global Error:", message);
+            // Alert user only if critical
+            if(document.body) {
+               // document.body.innerHTML += `<div style="color:red;padding:10px;">Error: ${message}</div>`;
             }
         };
     </script>
@@ -25,18 +24,8 @@
     <style>
         body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; }
         .chat-box { height: 250px; }
-        /* Error Box Style */
-        #error-box {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9);
-            color: white;
-            z-index: 9999;
-            padding: 20px;
-            text-align: center;
-            padding-top: 100px;
-        }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
     
     <script type="module">
@@ -44,7 +33,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, addDoc, onSnapshot, collection, query, serverTimestamp, orderBy, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // --- CONFIGURATION ---
+        // --- 1. CONFIGURATION (Working) ---
         const firebaseConfig = {
             apiKey: "AIzaSyDmBGDRtxUt74omyAi6YH9BySWm7kUjpAU",
             authDomain: "reseller-729f0.firebaseapp.com",
@@ -54,67 +43,49 @@
             appId: "1:225176781360:web:acb5099ac84cd4da87e3f5"
         };
 
-        // --- INITIALIZATION ---
+        // --- 2. APP LOGIC ---
         try {
-            console.log("Starting Firebase...");
             const app = initializeApp(firebaseConfig);
             const db = getFirestore(app);
             const auth = getAuth(app);
             
-            console.log("Firebase Started");
-
             let userId = null;
             let userName = null;
             let userProfile = {};
             let tempMobileNumber = "";
 
-            // --- AUTH LOGIC ---
+            // Auth Listener
             onAuthStateChanged(auth, async (user) => {
-                // Hide Loading Screen
-                const loader = document.getElementById('loading-screen');
-                if(loader) loader.style.display = 'none';
-                
+                document.getElementById('loading-screen').classList.add('hidden');
                 if (user) {
-                    console.log("Logged In:", user.uid);
                     userId = user.uid;
                     await checkUserProfile(userId);
                 } else {
-                    console.log("Signing In Anonymously...");
-                    try {
-                        await signInAnonymously(auth);
-                    } catch (err) {
-                        console.error("Auth Error:", err);
-                        alert("Login Error: " + err.message);
-                    }
+                    signInAnonymously(auth).catch(e => alert("Login Error: " + e.message));
                 }
             });
 
-            // --- FUNCTIONS ---
+            // --- CORE FUNCTIONS ---
             const checkUserProfile = async (uid) => {
-                try {
-                    const userRef = doc(db, 'users', uid);
-                    const docSnap = await getDoc(userRef);
-                    if (docSnap.exists()) {
-                        userProfile = docSnap.data();
-                        userName = userProfile.name;
-                        showView('view-home');
-                        startItemsListener();
-                        updateUserDisplay();
-                    } else {
-                        showView('view-login-mobile');
-                    }
-                } catch (e) {
-                    console.error("Profile Error:", e);
-                    if(e.code === 'permission-denied') {
-                        alert("Database Error: Firestore Rules me 'allow read, write: if true;' set karein.");
-                    } else if (e.code === 'unavailable') {
-                        alert("Internet Error: Net check karein.");
-                    }
+                const userRef = doc(db, 'users', uid);
+                const docSnap = await getDoc(userRef);
+                if (docSnap.exists()) {
+                    userProfile = docSnap.data();
+                    userName = userProfile.name;
+                    showView('view-home');
+                    startItemsListener(); // Default tab
+                    updateUserDisplay();
+                } else {
                     showView('view-login-mobile');
                 }
             };
 
-            // Expose functions to Window
+            const updateUserDisplay = () => {
+                document.querySelectorAll('.user-name-display').forEach(el => el.textContent = userName || 'Guest');
+                document.querySelectorAll('.user-photo-display').forEach(img => img.src = userProfile.photo || 'https://placehold.co/100');
+            };
+
+            // --- AUTH UI ---
             window.sendOtp = () => {
                 const mobile = document.getElementById('login-mobile').value.trim();
                 if (mobile.length !== 10) { alert('10 अंकों का नंबर डालें'); return; }
@@ -144,47 +115,58 @@
                     await new Promise(resolve => reader.onload = () => { photoBase64 = reader.result; resolve(); });
                 }
 
-                const saveBtn = document.getElementById('btn-save-profile');
-                saveBtn.innerText = "Saving...";
-                
-                try {
-                    await setDoc(doc(db, 'users', userId), {
-                        name, address, mobile, photo: photoBase64,
-                        joinedAt: serverTimestamp()
-                    }, { merge: true });
+                await setDoc(doc(db, 'users', userId), {
+                    name, address, mobile, photo: photoBase64,
+                    joinedAt: serverTimestamp()
+                }, { merge: true });
 
-                    userProfile = { name, address, mobile, photo: photoBase64 };
-                    userName = name;
-                    updateUserDisplay();
-                    showView('view-home');
-                    startItemsListener();
-                } catch(e) {
-                    alert("Save Error: " + e.message);
-                    saveBtn.innerText = "Save";
-                }
+                userProfile = { name, address, mobile, photo: photoBase64 };
+                userName = name;
+                updateUserDisplay();
+                showView('view-home');
+                startItemsListener();
             };
 
-            // Listeners
+            // --- HOME TABS ---
+            window.switchHomeTab = (tab) => {
+                // UI Update
+                document.getElementById('tab-items').className = "flex-1 py-3 font-bold text-gray-400 transition";
+                document.getElementById('tab-requests').className = "flex-1 py-3 font-bold text-gray-400 transition";
+                
+                document.getElementById(`tab-${tab}`).className = "flex-1 py-3 font-bold text-indigo-600 border-b-2 border-indigo-600 transition";
+
+                // Logic Update
+                if(tab === 'items') startItemsListener();
+                else startRequestsListener();
+            };
+
+            // --- LIST ITEMS ---
             window.startItemsListener = () => {
                 const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
                 onSnapshot(q, (snap) => {
                     const list = document.getElementById('items-grid');
                     list.innerHTML = '';
-                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400">Khali Hai</p>'; return; }
+                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400 py-10">कोई सामान नहीं है</p>'; return; }
+                    
                     snap.forEach(d => {
                         const item = d.data();
                         if (item.status !== 'sold') {
                             const div = document.createElement('div');
-                            div.className = 'bg-white rounded-xl shadow-sm overflow-hidden border cursor-pointer';
+                            div.className = 'bg-white rounded-2xl shadow-sm hover:shadow-lg transition overflow-hidden border border-gray-100 cursor-pointer fade-in';
                             div.onclick = (e) => { if(!e.target.closest('button')) showItemDetails(d.id, item.sellerId); };
                             div.innerHTML = `
-                                <img src="${item.imageData}" class="w-full h-40 object-cover">
-                                <div class="p-3">
-                                    <h3 class="font-bold truncate">${item.name}</h3>
-                                    <p class="text-indigo-600 font-bold">₹ ${item.price}</p>
-                                    <div class="flex justify-between mt-2 text-xs text-gray-500">
-                                        <span>${item.category}</span>
-                                        <button class="bg-indigo-50 text-indigo-600 px-2 py-1 rounded">View</button>
+                                <div class="relative h-48 overflow-hidden">
+                                    <img src="${item.imageData}" class="w-full h-full object-cover" alt="${item.name}">
+                                    <div class="absolute bottom-0 w-full bg-gradient-to-t from-black/70 to-transparent p-3">
+                                        <span class="text-white font-bold text-lg">₹ ${item.price}</span>
+                                    </div>
+                                </div>
+                                <div class="p-4">
+                                    <h3 class="font-bold text-gray-800 truncate">${item.name}</h3>
+                                    <p class="text-xs text-gray-500 mb-2">${item.category}</p>
+                                    <div class="flex justify-between items-center mt-2">
+                                        <span class="text-xs text-gray-400">By: ${item.sellerName ? item.sellerName.split(' ')[0] : 'User'}</span>
+                                        <button class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">खरीदें</button>
                                     </div>
                                 </div>`;
                             list.appendChild(div);
@@ -193,11 +175,44 @@
                 });
             };
 
+            // --- LIST REQUESTS ---
+            window.startRequestsListener = () => {
+                const q = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
+                onSnapshot(q, (snap) => {
+                    const list = document.getElementById('items-grid');
+                    list.innerHTML = '';
+                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400 py-10">कोई मांग नहीं है</p>'; return; }
+                    snap.forEach(d => {
+                        const req = d.data();
+                        const div = document.createElement('div');
+                        div.className = 'bg-white rounded-2xl p-5 shadow-sm border border-orange-100 relative fade-in';
+                        div.innerHTML = `
+                            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-xs px-2 py-1 rounded-bl-xl font-bold">WANTED</div>
+                            <h3 class="font-bold text-lg text-gray-800">${req.itemName}</h3>
+                            <p class="text-gray-600 text-sm mt-1">${req.description}</p>
+                            <div class="flex items-center gap-2 mt-4 pt-3 border-t border-gray-50">
+                                <img src="${req.requesterPhoto || 'https://placehold.co/50'}" class="w-8 h-8 rounded-full object-cover">
+                                <div class="text-xs">
+                                    <p class="font-bold">${req.requesterName}</p>
+                                    <p class="text-gray-400">को चाहिए</p>
+                                </div>
+                            </div>`;
+                        list.appendChild(div);
+                    });
+                });
+            };
+
+            // --- SUBMIT ITEM ---
             window.submitSell = async (e) => {
                 e.preventDefault();
                 const form = document.getElementById('form-sell');
                 const file = document.getElementById('inp-file').files[0];
                 if(!file) { alert('Photo chahiye'); return; }
+                
+                // Loading state
+                const btn = e.target.querySelector('button');
+                btn.innerText = "Uploading..."; btn.disabled = true;
+
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
                 reader.onload = async () => {
@@ -208,156 +223,417 @@
                         status: 'available', createdAt: serverTimestamp()
                     });
                     form.reset();
+                    btn.innerText = "Post Ad"; btn.disabled = false;
                     showView('view-home');
+                    switchHomeTab('items');
                 };
             };
 
-            // Navigation Helpers
+            // --- SUBMIT REQUEST ---
+            window.submitRequest = async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('req-name').value;
+                const desc = document.getElementById('req-desc').value;
+                await addDoc(collection(db, 'requests'), {
+                    itemName: name, description: desc,
+                    requesterId: userId, requesterName: userName, requesterPhoto: userProfile.photo,
+                    createdAt: serverTimestamp()
+                });
+                document.getElementById('form-request').reset();
+                showView('view-home');
+                switchHomeTab('requests');
+            };
+
+            // --- ITEM DETAILS + DEALS ---
+            let dealsUnsub;
+            window.showItemDetails = async (itemId, sellerId) => {
+                const iSnap = await getDoc(doc(db, 'items', itemId));
+                const sSnap = await getDoc(doc(db, 'users', sellerId));
+                
+                if(!iSnap.exists()) return;
+                const item = iSnap.data();
+                const seller = sSnap.exists() ? sSnap.data() : {name:'User', mobile:'Hidden'};
+
+                // Fill UI
+                document.getElementById('det-img').src = item.imageData;
+                document.getElementById('det-title').innerText = item.name;
+                document.getElementById('det-price').innerText = `₹ ${item.price}`;
+                document.getElementById('det-desc').innerText = item.description || "No description";
+                
+                document.getElementById('det-seller-photo').src = seller.photo || 'https://placehold.co/100';
+                document.getElementById('det-seller-name').innerText = seller.name;
+                document.getElementById('det-seller-mobile').innerText = seller.mobile;
+                document.getElementById('chat-item-id').value = itemId;
+
+                // --- DEAL LOGIC ---
+                const controls = document.getElementById('deal-controls');
+                controls.innerHTML = '<p class="text-sm text-gray-400">Loading Status...</p>';
+                
+                if(dealsUnsub) dealsUnsub();
+                const q = query(collection(db, 'deals'), where('itemId', '==', itemId));
+                
+                dealsUnsub = onSnapshot(q, (snap) => {
+                    controls.innerHTML = '';
+                    
+                    if (sellerId === userId) {
+                        // I AM SELLER
+                        controls.innerHTML = '<h3 class="font-bold mb-2 text-sm">खरीदने की रिक्वेस्ट:</h3>';
+                        if(snap.empty) controls.innerHTML += '<p class="text-xs text-gray-500">अभी कोई रिक्वेस्ट नहीं।</p>';
+                        
+                        snap.forEach(d => {
+                            const deal = d.data();
+                            if(deal.status === 'pending') {
+                                controls.innerHTML += `
+                                <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-2 flex justify-between items-center">
+                                    <div>
+                                        <p class="font-bold text-sm text-indigo-900">${deal.buyerName}</p>
+                                        <p class="text-xs text-indigo-600">खरीदना चाहता है</p>
+                                    </div>
+                                    <button onclick="acceptDeal('${d.id}')" class="bg-indigo-600 text-white px-3 py-1 rounded text-xs shadow">Accept</button>
+                                </div>`;
+                            } else if(deal.status === 'accepted') {
+                                controls.innerHTML += `
+                                <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
+                                    <p class="text-green-800 text-xs font-bold">Deal Accepted: ${deal.buyerName}</p>
+                                    <p class="text-green-700 text-xs mt-1">Meeting: ${deal.meetTime} @ ${deal.meetPlace}</p>
+                                </div>`;
+                            }
+                        });
+                    } else {
+                        // I AM BUYER
+                        const myDeal = snap.docs.find(d => d.data().buyerId === userId);
+                        if (!myDeal) {
+                            controls.innerHTML = `<button onclick="sendDealRequest('${itemId}')" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition">Yes, I want to buy</button>`;
+                        } else {
+                            const status = myDeal.data().status;
+                            if(status === 'pending') controls.innerHTML = `<div class="bg-yellow-100 p-4 rounded-xl text-center text-yellow-800 font-bold border border-yellow-200">निवेदन भेजा गया (Pending)</div>`;
+                            else if(status === 'accepted') controls.innerHTML = `<div class="bg-green-100 p-4 rounded-xl text-center border border-green-200"><p class="text-green-800 font-bold text-lg">🎉 Deal Confirmed!</p><p class="text-sm text-green-700 mt-1">${myDeal.data().meetTime} @ ${myDeal.data().meetPlace}</p></div>`;
+                        }
+                    }
+                });
+
+                setupChat(itemId);
+                showView('view-details');
+            };
+
+            window.sendDealRequest = async (itemId) => {
+                await addDoc(collection(db, 'deals'), {
+                    itemId, buyerId: userId, buyerName: userName, status: 'pending', createdAt: serverTimestamp()
+                });
+            };
+
+            window.acceptDeal = (dealId) => {
+                document.getElementById('modal-deal-id').value = dealId;
+                document.getElementById('modal-logistics').classList.remove('hidden');
+            };
+
+            window.confirmDeal = async () => {
+                const dealId = document.getElementById('modal-deal-id').value;
+                const time = document.getElementById('deal-time').value;
+                const place = document.getElementById('deal-place').value;
+                if(!time || !place) return;
+                
+                await updateDoc(doc(db, 'deals', dealId), { status: 'accepted', meetTime: time, meetPlace: place });
+                document.getElementById('modal-logistics').classList.add('hidden');
+            };
+
+            // --- CHAT SYSTEM ---
+            const setupChat = (itemId) => {
+                const chatDiv = document.getElementById('chat-messages');
+                const q = query(collection(db, 'chats', itemId, 'messages'), orderBy('createdAt', 'asc'));
+                onSnapshot(q, (snap) => {
+                    chatDiv.innerHTML = '';
+                    if(snap.empty) chatDiv.innerHTML = '<p class="text-center text-xs text-gray-400 mt-4">Start discussion...</p>';
+                    snap.forEach(d => {
+                        const msg = d.data();
+                        const isMe = msg.senderId === userId;
+                        chatDiv.innerHTML += `
+                        <div class="flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2 fade-in">
+                            <div class="px-3 py-2 rounded-2xl text-xs max-w-[80%] ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border text-gray-700 rounded-bl-none'}">
+                                ${msg.text}
+                            </div>
+                        </div>`;
+                    });
+                    chatDiv.scrollTop = chatDiv.scrollHeight;
+                });
+            };
+
+            window.sendChat = async (e) => {
+                e.preventDefault();
+                const txt = document.getElementById('inp-chat').value.trim();
+                const itemId = document.getElementById('chat-item-id').value;
+                if(!txt) return;
+                await addDoc(collection(db, 'chats', itemId, 'messages'), { text: txt, senderId: userId, createdAt: serverTimestamp() });
+                document.getElementById('inp-chat').value = '';
+            };
+
+            // --- FULL PROFILE ---
+            window.showFullProfile = async () => {
+                 document.getElementById('prof-img').src = userProfile.photo || 'https://placehold.co/150';
+                 document.getElementById('prof-name').innerText = userProfile.name;
+                 document.getElementById('prof-mobile').innerText = userProfile.mobile;
+                 document.getElementById('prof-address').innerText = userProfile.address;
+
+                 // Stats
+                 const itemsQ = query(collection(db, 'items'), where('sellerId', '==', userId));
+                 onSnapshot(itemsQ, s => document.getElementById('stat-sold').innerText = s.size);
+                 
+                 // History
+                 const histList = document.getElementById('history-list');
+                 histList.innerHTML = '<p class="text-xs text-gray-400">Loading...</p>';
+                 
+                 // Simple query for deals where I am buyer or seller (requires 2 queries or client filter)
+                 // Client filter for simplicity
+                 const allDeals = query(collection(db, 'deals'), where('status', '==', 'accepted'));
+                 onSnapshot(allDeals, (snap) => {
+                    histList.innerHTML = '';
+                    let count = 0;
+                    snap.forEach(d => {
+                        const deal = d.data();
+                        // Manual filtering because Firestore OR queries are complex
+                        // We assume item seller ID is fetched, but here we simplify: 
+                        // If I am buyer, I bought. Logic for "Sold" needs item lookup, 
+                        // but for now we just show what we can easily.
+                        if (deal.buyerId === userId) {
+                            count++;
+                            histList.innerHTML += `
+                            <div class="flex justify-between items-center p-3 bg-slate-50 rounded mb-2 border border-slate-100">
+                                <div>
+                                    <p class="font-bold text-sm text-slate-700">Item Bought</p>
+                                    <p class="text-xs text-gray-400">${deal.meetTime}</p>
+                                </div>
+                                <span class="text-red-500 font-bold text-xs">Debit</span>
+                            </div>`;
+                        }
+                    });
+                    if(count === 0) histList.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No transaction history.</p>';
+                 });
+
+                 showView('view-profile-full');
+            };
+
+            // --- VIEW NAV ---
             window.showView = (id) => {
                 document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
                 document.getElementById(id).classList.remove('hidden');
                 window.scrollTo(0,0);
             };
 
-            window.switchHomeTab = (t) => {
-                if(t==='items') window.startItemsListener(); 
-                // Request logic simplified for brevity
-            };
-            
-            window.updateUserDisplay = () => {
-                 document.querySelectorAll('.user-name-display').forEach(el => el.textContent = userName || 'Guest');
-                 document.querySelectorAll('.user-photo-display').forEach(img => img.src = userProfile.photo || 'https://placehold.co/100');
-            };
-
-            // Full Profile Logic
-            window.showFullProfile = () => {
-                 document.getElementById('prof-name').innerText = userProfile.name;
-                 document.getElementById('prof-mobile').innerText = userProfile.mobile;
-                 showView('view-profile-full');
-            };
-
-            // Item Details Logic
-            window.showItemDetails = async (itemId, sellerId) => {
-                const iSnap = await getDoc(doc(db, 'items', itemId));
-                const sSnap = await getDoc(doc(db, 'users', sellerId));
-                const item = iSnap.data();
-                const seller = sSnap.exists() ? sSnap.data() : {};
-                
-                document.getElementById('det-title').innerText = item.name;
-                document.getElementById('det-price').innerText = "₹ " + item.price;
-                document.getElementById('det-img').src = item.imageData;
-                document.getElementById('det-seller-name').innerText = seller.name || 'User';
-                
-                showView('view-details');
-            };
-
         } catch (error) {
-            // This catches config errors
-             const errorBox = document.getElementById('error-box');
-             errorBox.style.display = 'block';
-             document.getElementById('error-message').innerText = "Critical Error: " + error.message;
+            console.error(error);
+            alert("App Error: " + error.message);
         }
     </script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen relative pb-20">
 
-    <!-- ERROR BOX (Hidden by default) -->
-    <div id="error-box">
-        <h2 style="font-size: 24px; color: red; font-weight: bold;">⚠️ Error Aaya Hai!</h2>
-        <p id="error-message" style="margin-top: 20px; font-size: 18px;">Loading...</p>
-        <p style="margin-top: 20px; font-size: 14px; color: #ccc;">Is error ka screenshot lekar mujhe bhejein.</p>
-    </div>
-
-    <!-- LOADING SCREEN -->
+    <!-- LOADING -->
     <div id="loading-screen" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-        <p class="text-gray-500 font-medium">Bazaar Load ho raha hai...</p>
-        <p class="text-xs text-gray-400 mt-2">Please Wait...</p>
+        <p class="text-gray-500 font-medium">Bazaar Opening...</p>
     </div>
 
-    <!-- VIEW 1: LOGIN -->
+    <!-- MODAL LOGISTICS -->
+    <div id="modal-logistics" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl animate-bounce-in">
+            <h3 class="font-bold text-lg mb-4 text-indigo-900">Confirm Deal</h3>
+            <p class="text-xs text-gray-500 mb-4">Buyer ko batayein kahan aana hai.</p>
+            <input type="hidden" id="modal-deal-id">
+            <div class="space-y-3">
+                <input id="deal-time" class="w-full p-3 border rounded-xl bg-slate-50 outline-none focus:ring-2 ring-indigo-200" placeholder="कब? (Date & Time)">
+                <input id="deal-place" class="w-full p-3 border rounded-xl bg-slate-50 outline-none focus:ring-2 ring-indigo-200" placeholder="कहाँ? (Location)">
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="document.getElementById('modal-logistics').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-600">Cancel</button>
+                <button onclick="confirmDeal()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. LOGIN -->
     <div id="view-login-mobile" class="app-view hidden min-h-screen flex flex-col items-center justify-center p-6 bg-white">
+        <div class="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mb-6 text-3xl">🛍️</div>
         <h1 class="text-3xl font-bold text-slate-900 mb-8">Bazaar Login</h1>
         <div class="w-full max-w-sm space-y-4">
-            <input id="login-mobile" type="tel" class="w-full p-4 border rounded-xl text-lg bg-slate-50" placeholder="Mobile Number">
-            <button onclick="sendOtp()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold">Get OTP</button>
+            <input id="login-mobile" type="tel" class="w-full p-4 border rounded-xl text-lg bg-slate-50 outline-none focus:border-indigo-500" placeholder="Mobile Number">
+            <button onclick="sendOtp()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-xl shadow-indigo-200">Get OTP</button>
         </div>
     </div>
 
-    <!-- VIEW 2: OTP -->
+    <!-- 2. OTP -->
     <div id="view-login-otp" class="app-view hidden min-h-screen flex flex-col items-center justify-center p-6 bg-white">
         <h2 class="text-2xl font-bold mb-4">Enter OTP</h2>
-        <input id="login-otp" type="number" class="w-full max-w-sm p-4 border rounded-xl text-center text-2xl tracking-widest mb-4" placeholder="1234">
-        <button onclick="verifyOtp()" class="w-full max-w-sm bg-indigo-600 text-white py-4 rounded-xl font-bold">Verify</button>
+        <input id="login-otp" type="number" class="w-full max-w-sm p-4 border rounded-xl text-center text-2xl tracking-widest mb-6 outline-none focus:border-indigo-500" placeholder="1234">
+        <button onclick="verifyOtp()" class="w-full max-w-sm bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-xl">Verify</button>
     </div>
 
-    <!-- VIEW 3: REGISTER -->
+    <!-- 3. PROFILE SETUP -->
     <div id="view-register-profile" class="app-view hidden min-h-screen p-6 bg-white flex flex-col justify-center">
-        <h2 class="text-2xl font-bold mb-6">Profile</h2>
+        <h2 class="text-2xl font-bold mb-6 text-center">Complete Profile</h2>
         <div class="max-w-sm mx-auto w-full space-y-4">
-            <input id="reg-photo" type="file" class="w-full">
-            <input id="reg-name" class="w-full p-3 border rounded-xl" placeholder="Full Name">
+            <div class="relative w-24 h-24 mx-auto mb-6 bg-slate-100 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
+                <input id="reg-photo" type="file" class="absolute inset-0 opacity-0 z-10 w-full h-full">
+                <span class="text-xs text-gray-400">Photo</span>
+            </div>
+            <input id="reg-name" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Full Name">
             <input id="reg-mobile" type="text" disabled class="w-full p-3 bg-slate-100 rounded-xl text-gray-500">
-            <textarea id="reg-address" class="w-full p-3 border rounded-xl" placeholder="Address"></textarea>
-            <button id="btn-save-profile" onclick="saveProfile()" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Save</button>
+            <textarea id="reg-address" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="City / Address"></textarea>
+            <button onclick="saveProfile()" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Save Profile</button>
         </div>
     </div>
 
-    <!-- VIEW 4: HOME -->
+    <!-- 4. HOME -->
     <div id="view-home" class="app-view hidden">
-        <nav class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b flex justify-between items-center px-4 h-16">
-            <div class="font-bold text-xl text-indigo-600">Bazaar</div>
-            <div onclick="showFullProfile()" class="flex items-center gap-2 cursor-pointer bg-slate-100 py-1 px-3 rounded-full">
-                <img class="w-8 h-8 rounded-full object-cover user-photo-display" src="">
-                <span class="text-sm font-bold user-name-display">User</span>
+        <nav class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b flex justify-between items-center px-4 h-16 shadow-sm">
+            <div class="font-bold text-xl text-indigo-700 flex items-center gap-2"><span>🛍️</span> Bazaar</div>
+            <div onclick="showFullProfile()" class="flex items-center gap-2 cursor-pointer bg-indigo-50 py-1.5 px-3 rounded-full border border-indigo-100">
+                <img class="w-6 h-6 rounded-full object-cover user-photo-display" src="">
+                <span class="text-sm font-bold text-indigo-900 user-name-display">User</span>
             </div>
         </nav>
+        
+        <!-- Tabs -->
+        <div class="flex border-b bg-white sticky top-16 z-30 shadow-sm">
+            <button id="tab-items" onclick="switchHomeTab('items')" class="flex-1 py-3 font-bold text-indigo-600 border-b-2 border-indigo-600 transition">बाज़ार (Items)</button>
+            <button id="tab-requests" onclick="switchHomeTab('requests')" class="flex-1 py-3 font-bold text-gray-400 transition">मांग (Requests)</button>
+        </div>
+
         <main class="max-w-5xl mx-auto px-4 py-6 pb-24">
             <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </main>
-        <div class="fixed bottom-20 right-6 flex flex-col gap-3 z-30">
-            <button onclick="showView('view-sell')" class="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl">➕</button>
+
+        <!-- Floating Buttons -->
+        <div class="fixed bottom-24 right-6 flex flex-col gap-4 z-30">
+            <button onclick="showView('view-request-add')" class="w-12 h-12 bg-white text-orange-500 rounded-full shadow-lg border border-orange-100 flex items-center justify-center transform hover:scale-110 transition" title="Ask Item">📢</button>
+            <button onclick="showView('view-sell')" class="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl shadow-indigo-300 flex items-center justify-center text-2xl transform hover:scale-110 transition">➕</button>
         </div>
     </div>
 
-    <!-- VIEW 5: SELL -->
+    <!-- 5. SELL -->
     <div id="view-sell" class="app-view hidden bg-white min-h-screen">
-        <div class="p-4 border-b flex items-center gap-4">
-            <button onclick="showView('view-home')">Back</button>
-            <h2 class="font-bold text-xl">Sell</h2>
+        <div class="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-40">
+            <button onclick="showView('view-home')" class="p-2 rounded-full hover:bg-slate-100">⬅</button>
+            <h2 class="font-bold text-xl">Sell Item</h2>
         </div>
         <div class="p-6 max-w-lg mx-auto">
             <form id="form-sell" onsubmit="submitSell(event)" class="space-y-4">
-                <input id="inp-file" type="file" class="w-full">
-                <input name="name" class="w-full p-3 bg-slate-50 rounded-xl border" placeholder="Product Name" required>
-                <div class="flex gap-4">
-                    <input name="price" type="number" class="w-1/2 p-3 bg-slate-50 rounded-xl border" placeholder="Price ₹" required>
-                    <input name="category" class="w-1/2 p-3 bg-slate-50 rounded-xl border" placeholder="Category" required>
+                <div class="relative h-40 bg-slate-50 border-2 border-dashed border-indigo-200 rounded-xl flex items-center justify-center">
+                    <input id="inp-file" type="file" class="absolute inset-0 opacity-0 w-full h-full z-10">
+                    <span class="text-indigo-400 font-bold">📸 Click to Upload Photo</span>
                 </div>
-                <textarea name="desc" class="w-full p-3 bg-slate-50 rounded-xl border" placeholder="Details..."></textarea>
-                <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl">Post Ad</button>
+                <input name="name" class="w-full p-3 bg-slate-50 rounded-xl border outline-none focus:ring-2 ring-indigo-100" placeholder="Product Name" required>
+                <div class="flex gap-4">
+                    <input name="price" type="number" class="w-1/2 p-3 bg-slate-50 rounded-xl border outline-none" placeholder="Price ₹" required>
+                    <input name="category" class="w-1/2 p-3 bg-slate-50 rounded-xl border outline-none" placeholder="Category" required>
+                </div>
+                <textarea name="desc" class="w-full p-3 bg-slate-50 rounded-xl border outline-none" placeholder="Description..."></textarea>
+                <button class="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Post Ad</button>
             </form>
         </div>
     </div>
 
-    <!-- VIEW 6: DETAILS -->
-    <div id="view-details" class="app-view hidden bg-white min-h-screen">
-        <div class="relative h-64 bg-black">
-            <img id="det-img" class="w-full h-full object-cover opacity-80">
-            <button onclick="showView('view-home')" class="absolute top-4 left-4 bg-white/30 p-2 rounded-full text-white backdrop-blur">Back</button>
+    <!-- 6. ADD REQUEST -->
+    <div id="view-request-add" class="app-view hidden bg-white min-h-screen">
+        <div class="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-40">
+            <button onclick="showView('view-home')" class="p-2 rounded-full hover:bg-slate-100">⬅</button>
+            <h2 class="font-bold text-xl">Request Item</h2>
         </div>
-        <div class="p-6 -mt-6 bg-white rounded-t-3xl relative z-10">
-            <h2 id="det-title" class="text-2xl font-bold">Title</h2>
-            <p id="det-price" class="text-xl font-bold text-indigo-600">₹0</p>
-            <p class="text-sm text-gray-500 mt-2">Seller: <span id="det-seller-name" class="font-bold text-gray-800">Name</span></p>
+        <div class="p-6 max-w-lg mx-auto">
+            <div class="bg-orange-50 text-orange-800 p-4 rounded-xl text-sm mb-6 border border-orange-100">
+                Kuch chahiye jo market mein nahi mil raha? Yahan post karein.
+            </div>
+            <form id="form-request" onsubmit="submitRequest(event)" class="space-y-4">
+                <input id="req-name" class="w-full p-3 bg-slate-50 rounded-xl border outline-none focus:ring-2 ring-orange-100" placeholder="Item Name (Ex: Old Physics Book)" required>
+                <textarea id="req-desc" class="w-full p-3 bg-slate-50 rounded-xl border outline-none focus:ring-2 ring-orange-100" placeholder="Details (Budget, Condition etc.)" required></textarea>
+                <button class="w-full py-4 bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-200">Post Request</button>
+            </form>
         </div>
     </div>
 
-    <!-- VIEW 7: PROFILE -->
-    <div id="view-profile-full" class="app-view hidden bg-white min-h-screen p-6">
-        <button onclick="showView('view-home')" class="mb-4">Back</button>
-        <h2 id="prof-name" class="text-2xl font-bold">User</h2>
-        <p id="prof-mobile" class="text-gray-500">Mobile</p>
+    <!-- 7. DETAILS & CHAT -->
+    <div id="view-details" class="app-view hidden bg-white min-h-screen pb-20">
+        <!-- Header Image -->
+        <div class="relative h-72 bg-slate-900">
+            <img id="det-img" class="w-full h-full object-cover opacity-90">
+            <button onclick="showView('view-home')" class="absolute top-4 left-4 bg-white/20 backdrop-blur p-2 rounded-full text-white hover:bg-white/40 transition-colors">⬅</button>
+        </div>
+
+        <div class="max-w-3xl mx-auto -mt-6 relative bg-white rounded-t-3xl p-6 shadow-2xl">
+            <div class="flex justify-between items-start mb-4">
+                <h2 id="det-title" class="text-2xl font-bold text-slate-800 w-2/3 leading-tight">Title</h2>
+                <p id="det-price" class="text-2xl font-bold text-indigo-600">₹0</p>
+            </div>
+            
+            <p id="det-desc" class="text-slate-600 leading-relaxed mb-6">Desc...</p>
+
+            <!-- Seller Card -->
+            <div class="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+                <img id="det-seller-photo" class="w-12 h-12 rounded-full object-cover bg-white border">
+                <div>
+                    <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Owner</p>
+                    <p id="det-seller-name" class="font-bold text-slate-800">Name</p>
+                    <p id="det-seller-mobile" class="text-xs text-gray-500">Mobile Hidden</p>
+                </div>
+            </div>
+
+            <!-- DEAL ACTIONS -->
+            <div id="deal-controls" class="mb-8">
+                <!-- JS fills this -->
+            </div>
+
+            <!-- Chat -->
+            <div class="border-t pt-6">
+                <h3 class="font-bold text-lg mb-4 flex items-center gap-2">💬 Discussion</h3>
+                <div id="chat-messages" class="chat-box bg-slate-50 rounded-xl border border-slate-200 p-4 mb-4 overflow-y-auto shadow-inner">
+                    <!-- Messages -->
+                </div>
+                <form onsubmit="sendChat(event)" class="flex gap-2">
+                    <input type="hidden" id="chat-item-id">
+                    <input id="inp-chat" class="flex-1 p-3 bg-white border rounded-xl outline-none focus:ring-2 ring-indigo-100" placeholder="Type a message...">
+                    <button class="bg-indigo-600 text-white px-5 rounded-xl font-bold shadow-lg">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. FULL PROFILE -->
+    <div id="view-profile-full" class="app-view hidden bg-white min-h-screen">
+        <div class="bg-indigo-600 p-6 text-white pt-10 pb-20 relative rounded-b-[2.5rem] shadow-xl">
+            <button onclick="showView('view-home')" class="absolute top-4 left-4 bg-white/20 p-2 rounded-full">⬅</button>
+            <div class="flex flex-col items-center">
+                <img id="prof-img" class="w-24 h-24 rounded-full border-4 border-white bg-white object-cover shadow-lg mb-3" src="">
+                <h2 id="prof-name" class="text-2xl font-bold">User</h2>
+                <p id="prof-mobile" class="text-indigo-200">Mobile</p>
+            </div>
+        </div>
+        
+        <div class="max-w-3xl mx-auto px-6 -mt-12">
+            <!-- Info Card -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <p class="text-gray-400 text-xs font-bold uppercase">Address</p>
+                        <p id="prof-address" class="text-slate-800 font-medium mt-1">Address...</p>
+                    </div>
+                </div>
+                <div class="flex pt-4 border-t">
+                    <div class="flex-1 text-center border-r">
+                        <p id="stat-sold" class="text-2xl font-bold text-indigo-600">0</p>
+                        <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Active Ads</p>
+                    </div>
+                    <div class="flex-1 text-center">
+                        <p class="text-2xl font-bold text-green-600">Free</p>
+                        <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Plan</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transactions -->
+            <h3 class="font-bold text-lg mb-3 ml-1">Purchases</h3>
+            <div id="history-list" class="space-y-3 pb-10">
+                <!-- JS fills -->
+            </div>
+        </div>
     </div>
 
 </body>
