@@ -6,24 +6,316 @@
     <title>ऑनलाइन बाज़ार - Online Bazaar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts -->
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .chat-box { height: 250px; }
+    </style>
     
-    <!-- लिंक: आपकी CSS फाइल -->
-    <link rel="stylesheet" href="style.css">
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, onSnapshot, collection, query, serverTimestamp, orderBy, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- 1. CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDmBGDRtxUt74omyAi6YH9BySWm7kUjpAU",
+            authDomain: "reseller-729f0.firebaseapp.com",
+            projectId: "reseller-729f0",
+            storageBucket: "reseller-729f0.firebasestorage.app",
+            messagingSenderId: "225176781360",
+            appId: "1:225176781360:web:acb5099ac84cd4da87e3f5"
+        };
+
+        // --- 2. INITIALIZATION ---
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            const auth = getAuth(app);
+            
+            console.log("Firebase Started");
+
+            let userId = null;
+            let userName = null;
+            let userProfile = {};
+            let tempMobileNumber = "";
+
+            // --- 3. AUTH LOGIC ---
+            onAuthStateChanged(auth, async (user) => {
+                // Hide Loading Screen
+                document.getElementById('loading-screen').classList.add('hidden');
+                
+                if (user) {
+                    console.log("Logged In:", user.uid);
+                    userId = user.uid;
+                    await checkUserProfile(userId);
+                } else {
+                    console.log("Signing In Anonymously...");
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (err) {
+                        console.error("Auth Error:", err);
+                        alert("Login Error: Firebase Console me 'Anonymous Auth' enable karein.\n\nError: " + err.message);
+                    }
+                }
+            });
+
+            // --- FUNCTIONS ---
+            const checkUserProfile = async (uid) => {
+                try {
+                    const userRef = doc(db, 'users', uid);
+                    const docSnap = await getDoc(userRef);
+                    if (docSnap.exists()) {
+                        userProfile = docSnap.data();
+                        userName = userProfile.name;
+                        showView('view-home');
+                        startItemsListener();
+                        updateUserDisplay();
+                    } else {
+                        showView('view-login-mobile');
+                    }
+                } catch (e) {
+                    console.error("Profile Error:", e);
+                    // Agar Database Rules galat hain to ye error aayega
+                    if(e.code === 'permission-denied') {
+                        alert("Database Error: Firestore Rules me 'allow read, write: if true;' set karein.");
+                    }
+                    showView('view-login-mobile');
+                }
+            };
+
+            // Expose functions to Window so HTML buttons can work
+            window.sendOtp = () => {
+                const mobile = document.getElementById('login-mobile').value.trim();
+                if (mobile.length !== 10) { alert('10 अंकों का नंबर डालें'); return; }
+                tempMobileNumber = mobile;
+                showView('view-login-otp');
+            };
+
+            window.verifyOtp = () => {
+                const otp = document.getElementById('login-otp').value.trim();
+                if (otp.length < 4) { alert('Try 1234'); return; }
+                document.getElementById('reg-mobile').value = tempMobileNumber;
+                showView('view-register-profile');
+            };
+
+            window.saveProfile = async () => {
+                const name = document.getElementById('reg-name').value.trim();
+                const address = document.getElementById('reg-address').value.trim();
+                const mobile = document.getElementById('reg-mobile').value.trim();
+                const file = document.getElementById('reg-photo').files[0];
+
+                if (!name || !address) { alert('Details bharein'); return; }
+
+                let photoBase64 = null;
+                if (file) {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    await new Promise(resolve => reader.onload = () => { photoBase64 = reader.result; resolve(); });
+                }
+
+                await setDoc(doc(db, 'users', userId), {
+                    name, address, mobile, photo: photoBase64,
+                    joinedAt: serverTimestamp()
+                }, { merge: true });
+
+                userProfile = { name, address, mobile, photo: photoBase64 };
+                userName = name;
+                updateUserDisplay();
+                showView('view-home');
+                startItemsListener();
+            };
+
+            // Listeners
+            window.startItemsListener = () => {
+                const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
+                onSnapshot(q, (snap) => {
+                    const list = document.getElementById('items-grid');
+                    list.innerHTML = '';
+                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400">Khali Hai</p>'; return; }
+                    snap.forEach(d => {
+                        const item = d.data();
+                        if (item.status !== 'sold') {
+                            const div = document.createElement('div');
+                            div.className = 'bg-white rounded-xl shadow-sm overflow-hidden border cursor-pointer';
+                            div.onclick = (e) => { if(!e.target.closest('button')) showItemDetails(d.id, item.sellerId); };
+                            div.innerHTML = `
+                                <img src="${item.imageData}" class="w-full h-40 object-cover">
+                                <div class="p-3">
+                                    <h3 class="font-bold truncate">${item.name}</h3>
+                                    <p class="text-indigo-600 font-bold">₹ ${item.price}</p>
+                                    <div class="flex justify-between mt-2 text-xs text-gray-500">
+                                        <span>${item.category}</span>
+                                        <button class="bg-indigo-50 text-indigo-600 px-2 py-1 rounded">View</button>
+                                    </div>
+                                </div>`;
+                            list.appendChild(div);
+                        }
+                    });
+                });
+            };
+
+            window.submitSell = async (e) => {
+                e.preventDefault();
+                const form = document.getElementById('form-sell');
+                const file = document.getElementById('inp-file').files[0];
+                if(!file) { alert('Photo chahiye'); return; }
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = async () => {
+                    await addDoc(collection(db, 'items'), {
+                        name: form['name'].value, price: Number(form['price'].value),
+                        category: form['category'].value, description: form['desc'].value,
+                        imageData: reader.result, sellerId: userId, sellerName: userName, sellerPhoto: userProfile.photo,
+                        status: 'available', createdAt: serverTimestamp()
+                    });
+                    form.reset();
+                    showView('view-home');
+                };
+            };
+
+            // Navigation Helpers
+            window.showView = (id) => {
+                document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
+                document.getElementById(id).classList.remove('hidden');
+                window.scrollTo(0,0);
+            };
+
+            window.switchHomeTab = (t) => {
+                if(t==='items') window.startItemsListener(); 
+                // Request logic simplified for brevity
+            };
+            
+            window.updateUserDisplay = () => {
+                 document.querySelectorAll('.user-name-display').forEach(el => el.textContent = userName || 'Guest');
+                 document.querySelectorAll('.user-photo-display').forEach(img => img.src = userProfile.photo || 'https://placehold.co/100');
+            };
+
+            // Full Profile Logic
+            window.showFullProfile = () => {
+                 document.getElementById('prof-name').innerText = userProfile.name;
+                 document.getElementById('prof-mobile').innerText = userProfile.mobile;
+                 showView('view-profile-full');
+            };
+
+            // Item Details Logic
+            window.showItemDetails = async (itemId, sellerId) => {
+                const iSnap = await getDoc(doc(db, 'items', itemId));
+                const sSnap = await getDoc(doc(db, 'users', sellerId));
+                const item = iSnap.data();
+                const seller = sSnap.exists() ? sSnap.data() : {};
+                
+                document.getElementById('det-title').innerText = item.name;
+                document.getElementById('det-price').innerText = "₹ " + item.price;
+                document.getElementById('det-img').src = item.imageData;
+                document.getElementById('det-seller-name').innerText = seller.name || 'User';
+                
+                showView('view-details');
+            };
+
+        } catch (error) {
+            document.body.innerHTML = `<h2 style="color:red; padding:20px;">Code Error: ${error.message}</h2>`;
+            console.error(error);
+        }
+    </script>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen relative pb-20 md:pb-0">
+<body class="bg-slate-50 text-slate-800 min-h-screen relative pb-20">
 
-    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 translate-y-20 opacity-0"></div>
-
-    <!-- MODAL: DEAL LOGISTICS -->
-    <div id="modal-logistics" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4">
-        <!-- (बाकी का HTML कोड यहाँ पेस्ट करें जो ऊपर वाली फ़ाइल में <body> के अंदर है) -->
-        <!-- शॉर्ट के लिए मैं पूरा कोड दोबारा नहीं लिख रहा, आप ऊपर वाली फाइल से body के अंदर का कंटेंट यहाँ डालें -->
-         ...
+    <!-- LOADING SCREEN (Default Visible) -->
+    <div id="loading-screen" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+        <p class="text-gray-500 font-medium">Bazaar Load ho raha hai...</p>
+        <p class="text-xs text-gray-400 mt-2">Agar ye nahi hata, to AdBlocker band karein.</p>
     </div>
 
-    <!-- लिंक: आपकी JS फाइल -->
-    <script type="module" src="script.js"></script>
+    <!-- VIEW 1: LOGIN -->
+    <div id="view-login-mobile" class="app-view hidden min-h-screen flex flex-col items-center justify-center p-6 bg-white">
+        <h1 class="text-3xl font-bold text-slate-900 mb-8">Bazaar Login</h1>
+        <div class="w-full max-w-sm space-y-4">
+            <input id="login-mobile" type="tel" class="w-full p-4 border rounded-xl text-lg bg-slate-50" placeholder="Mobile Number">
+            <button onclick="sendOtp()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold">Get OTP</button>
+        </div>
+    </div>
+
+    <!-- VIEW 2: OTP -->
+    <div id="view-login-otp" class="app-view hidden min-h-screen flex flex-col items-center justify-center p-6 bg-white">
+        <h2 class="text-2xl font-bold mb-4">Enter OTP</h2>
+        <input id="login-otp" type="number" class="w-full max-w-sm p-4 border rounded-xl text-center text-2xl tracking-widest mb-4" placeholder="1234">
+        <button onclick="verifyOtp()" class="w-full max-w-sm bg-indigo-600 text-white py-4 rounded-xl font-bold">Verify</button>
+    </div>
+
+    <!-- VIEW 3: REGISTER -->
+    <div id="view-register-profile" class="app-view hidden min-h-screen p-6 bg-white flex flex-col justify-center">
+        <h2 class="text-2xl font-bold mb-6">Profile</h2>
+        <div class="max-w-sm mx-auto w-full space-y-4">
+            <input id="reg-photo" type="file" class="w-full">
+            <input id="reg-name" class="w-full p-3 border rounded-xl" placeholder="Full Name">
+            <input id="reg-mobile" type="text" disabled class="w-full p-3 bg-slate-100 rounded-xl text-gray-500">
+            <textarea id="reg-address" class="w-full p-3 border rounded-xl" placeholder="Address"></textarea>
+            <button onclick="saveProfile()" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Save</button>
+        </div>
+    </div>
+
+    <!-- VIEW 4: HOME -->
+    <div id="view-home" class="app-view hidden">
+        <nav class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b flex justify-between items-center px-4 h-16">
+            <div class="font-bold text-xl text-indigo-600">Bazaar</div>
+            <div onclick="showFullProfile()" class="flex items-center gap-2 cursor-pointer bg-slate-100 py-1 px-3 rounded-full">
+                <img class="w-8 h-8 rounded-full object-cover user-photo-display" src="">
+                <span class="text-sm font-bold user-name-display">User</span>
+            </div>
+        </nav>
+        <main class="max-w-5xl mx-auto px-4 py-6 pb-24">
+            <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </main>
+        <div class="fixed bottom-20 right-6 flex flex-col gap-3 z-30">
+            <button onclick="showView('view-sell')" class="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl">➕</button>
+        </div>
+    </div>
+
+    <!-- VIEW 5: SELL -->
+    <div id="view-sell" class="app-view hidden bg-white min-h-screen">
+        <div class="p-4 border-b flex items-center gap-4">
+            <button onclick="showView('view-home')">Back</button>
+            <h2 class="font-bold text-xl">Sell</h2>
+        </div>
+        <div class="p-6 max-w-lg mx-auto">
+            <form id="form-sell" onsubmit="submitSell(event)" class="space-y-4">
+                <input id="inp-file" type="file" class="w-full">
+                <input name="name" class="w-full p-3 bg-slate-50 rounded-xl border" placeholder="Product Name" required>
+                <div class="flex gap-4">
+                    <input name="price" type="number" class="w-1/2 p-3 bg-slate-50 rounded-xl border" placeholder="Price ₹" required>
+                    <input name="category" class="w-1/2 p-3 bg-slate-50 rounded-xl border" placeholder="Category" required>
+                </div>
+                <textarea name="desc" class="w-full p-3 bg-slate-50 rounded-xl border" placeholder="Details..."></textarea>
+                <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl">Post Ad</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- VIEW 6: DETAILS -->
+    <div id="view-details" class="app-view hidden bg-white min-h-screen">
+        <div class="relative h-64 bg-black">
+            <img id="det-img" class="w-full h-full object-cover opacity-80">
+            <button onclick="showView('view-home')" class="absolute top-4 left-4 bg-white/30 p-2 rounded-full text-white backdrop-blur">Back</button>
+        </div>
+        <div class="p-6 -mt-6 bg-white rounded-t-3xl relative z-10">
+            <h2 id="det-title" class="text-2xl font-bold">Title</h2>
+            <p id="det-price" class="text-xl font-bold text-indigo-600">₹0</p>
+            <p class="text-sm text-gray-500 mt-2">Seller: <span id="det-seller-name" class="font-bold text-gray-800">Name</span></p>
+        </div>
+    </div>
+
+    <!-- VIEW 7: PROFILE -->
+    <div id="view-profile-full" class="app-view hidden bg-white min-h-screen p-6">
+        <button onclick="showView('view-home')" class="mb-4">Back</button>
+        <h2 id="prof-name" class="text-2xl font-bold">User</h2>
+        <p id="prof-mobile" class="text-gray-500">Mobile</p>
+    </div>
+
 </body>
 </html>
