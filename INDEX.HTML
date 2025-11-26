@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ऑनलाइन बाज़ार - Online Bazaar</title>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.0/dist/full.css" rel="stylesheet" type="text/css" />
-<script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; }
@@ -13,20 +12,15 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .chat-box { height: 250px; }
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, addDoc, onSnapshot, collection, query, serverTimestamp, orderBy, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // ==========================================
-        // 👇 FINAL CONFIGURATION (Aapki Keys Yahan Hain) 👇
-        // ==========================================
-        
-        const manualConfig = {
+        // --- DIRECT CONFIGURATION (No IF-ELSE) ---
+        const firebaseConfig = {
             apiKey: "AIzaSyDmBGDRtxUt74omyAi6YH9BySWm7kUjpAU",
             authDomain: "reseller-729f0.firebaseapp.com",
             projectId: "reseller-729f0",
@@ -35,24 +29,13 @@
             appId: "1:225176781360:web:acb5099ac84cd4da87e3f5"
         };
 
-        // ==========================================
-
-        let firebaseConfig;
-        let initialAuthToken = null;
-        let appId = 'shop-live'; 
-
-        // Check environment
-        if (typeof __firebase_config !== 'undefined') {
-            firebaseConfig = JSON.parse(__firebase_config);
-            if (typeof __app_id !== 'undefined') appId = __app_id;
-            if (typeof __initial_auth_token !== 'undefined') initialAuthToken = __initial_auth_token;
-        } else {
-            firebaseConfig = manualConfig;
-        }
-
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        
+        // Simple Console Log to check if JS is running
+        console.log("Firebase Initialized");
 
         let userId = null;
         let userName = null;
@@ -63,18 +46,16 @@
         window.initApp = async () => {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
+                    console.log("User Logged In:", user.uid);
                     userId = user.uid;
                     await checkUserProfile(userId);
                 } else {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        try {
-                            await signInAnonymously(auth);
-                        } catch (error) {
-                            console.error("Login Error:", error);
-                            alert("Login nahi ho pa raha. Kripya Firebase Console me 'Authentication > Sign-in method > Anonymous' enable karein.");
-                        }
+                    console.log("No User, Signing in Anonymously...");
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Login Error:", error);
+                        alert("Error: Firebase Auth (Anonymous) enable nahi hai. Console check karein.");
                     }
                 }
             });
@@ -82,14 +63,8 @@
 
         const checkUserProfile = async (uid) => {
             try {
-                // Determine Path based on Environment
-                let userRef;
-                if (typeof __firebase_config !== 'undefined') {
-                    userRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'data');
-                } else {
-                    userRef = doc(db, 'users', uid);
-                }
-
+                // Using simple collection 'users' for GitHub Live
+                const userRef = doc(db, 'users', uid);
                 const docSnap = await getDoc(userRef);
                 
                 if (docSnap.exists()) {
@@ -114,21 +89,9 @@
         };
 
         // --- HELPER FOR COLLECTIONS ---
-        const getColRef = (colName) => {
-             if (typeof __firebase_config !== 'undefined') {
-                 return collection(db, 'artifacts', appId, 'public', 'data', colName);
-             } else {
-                 return collection(db, colName);
-             }
-        };
-
-        const getUserDocRef = () => {
-            if (typeof __firebase_config !== 'undefined') {
-                 return doc(db, 'artifacts', appId, 'users', userId, 'profile', 'data');
-            } else {
-                 return doc(db, 'users', userId);
-            }
-        };
+        // Using simple collection names for Live
+        const getColRef = (colName) => collection(db, colName);
+        const getUserDocRef = () => doc(db, 'users', userId);
 
         // --- LOGIN & OTP SIMULATION ---
         window.sendOtp = () => {
@@ -296,12 +259,7 @@
                 const item = itemSnap.data();
 
                 // Fetch Seller
-                let sellerRef;
-                if(typeof __firebase_config !== 'undefined') {
-                    sellerRef = doc(db, 'artifacts', appId, 'users', sellerId, 'profile', 'data');
-                } else {
-                    sellerRef = doc(db, 'users', sellerId);
-                }
+                const sellerRef = doc(db, 'users', sellerId);
                 const sellerSnap = await getDoc(sellerRef);
                 if(sellerSnap.exists()) seller = sellerSnap.data();
 
@@ -377,12 +335,8 @@
 
         const setupChat = (itemId) => {
             const chatDiv = document.getElementById('chat-messages');
-            let chatRef;
-            if(typeof __firebase_config !== 'undefined') {
-                 chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chats', itemId, 'messages');
-            } else {
-                 chatRef = collection(db, 'chats', itemId, 'messages');
-            }
+            // Simplified chat path for Live
+            const chatRef = collection(db, 'chats', itemId, 'messages');
 
             const q = query(chatRef, orderBy('createdAt', 'asc'));
             onSnapshot(q, (snap) => {
@@ -403,12 +357,8 @@
             const itemId = document.getElementById('chat-item-id').value;
             if(!txt) return;
 
-            let chatRef;
-            if(typeof __firebase_config !== 'undefined') {
-                 chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chats', itemId, 'messages');
-            } else {
-                 chatRef = collection(db, 'chats', itemId, 'messages');
-            }
+            // Simplified chat path for Live
+            const chatRef = collection(db, 'chats', itemId, 'messages');
 
             await addDoc(chatRef, { text: txt, senderId: userId, createdAt: serverTimestamp() });
             document.getElementById('inp-chat').value = '';
@@ -591,4 +541,3 @@
 
 </body>
 </html>
-
