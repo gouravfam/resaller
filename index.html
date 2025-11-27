@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ऑनलाइन बाज़ार - Online Bazaar</title>
+    <title>Bazaar AI</title>
     
     <script>
         window.onerror = function(message, source, lineno, colno, error) {
@@ -19,8 +19,30 @@
         .chat-box { height: 250px; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .toast-enter { transform: translateY(100%); opacity: 0; }
-        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease-out; }
+        
+        /* Vibrant Gradient */
+        .bg-theme { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%); }
+        .text-theme { background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        /* AI Gradient Button */
+        .btn-ai {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white; border: none;
+        }
+        .btn-ai:hover { opacity: 0.9; transform: scale(1.02); }
+        
+        /* Sold Out Overlay */
+        .sold-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10;
+        }
+        .sold-badge {
+            background: #ef4444; color: white; padding: 5px 15px; 
+            border-radius: 20px; font-weight: bold; transform: rotate(-10deg);
+            border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
     </style>
     
     <script type="module">
@@ -28,7 +50,7 @@
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, addDoc, onSnapshot, collection, query, serverTimestamp, orderBy, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // --- 1. CONFIGURATION ---
+        // --- 1. FIREBASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyDmBGDRtxUt74omyAi6YH9BySWm7kUjpAU",
             authDomain: "reseller-729f0.firebaseapp.com",
@@ -38,7 +60,69 @@
             appId: "1:225176781360:web:acb5099ac84cd4da87e3f5"
         };
 
-        // --- 2. APP LOGIC ---
+        // --- 2. GEMINI AI CONFIGURATION ---
+        const manualGeminiKey = ""; 
+
+        // --- TRANSLATIONS ---
+        const translations = {
+            en: {
+                loginTitle: "Welcome Back",
+                mobilePlace: "Mobile Number",
+                passPlace: "Password",
+                loginBtn: "Login Securely",
+                noAcc: "New here?",
+                createOne: "Join Now",
+                createTitle: "Join Bazaar AI",
+                fullName: "Full Name",
+                bioPlace: "Your Bio (e.g. Gadget Lover)",
+                addrPlace: "City / Area",
+                createBtn: "Start Journey",
+                tabItems: "Market",
+                tabReq: "Requests",
+                sellItem: "Sell Item",
+                reqItem: "Request Item",
+                search: "Search...",
+                chat: "Chat",
+                dealReq: "Deal Requests",
+                myDeals: "My Deals",
+                soldOut: "SOLD OUT",
+                iHave: "I Have This",
+                accept: "Accept",
+                reject: "Reject",
+                confirm: "Confirm Deal",
+                logout: "Logout"
+            },
+            hi: {
+                loginTitle: "स्वागत है",
+                mobilePlace: "मोबाइल नंबर",
+                passPlace: "पासवर्ड",
+                loginBtn: "लॉगिन करें",
+                noAcc: "नये हैं?",
+                createOne: "जुड़ें",
+                createTitle: "खाता बनाएं",
+                fullName: "पूरा नाम",
+                bioPlace: "अपने बारे में (जैसे: गैजेट प्रेमी)",
+                addrPlace: "शहर / पता",
+                createBtn: "शुरू करें",
+                tabItems: "बाज़ार",
+                tabReq: "मांग",
+                sellItem: "सामान बेचें",
+                reqItem: "मांग डालें",
+                search: "ढूंढें...",
+                chat: "बातचीत",
+                dealReq: "सौदा अनुरोध",
+                myDeals: "मेरे सौदे",
+                soldOut: "बिक गया",
+                iHave: "मेरे पास है",
+                accept: "स्वीकार करें",
+                reject: "अस्वीकार",
+                confirm: "सौदा पक्का करें",
+                logout: "लॉग आउट"
+            }
+        };
+
+        let currentLang = 'en'; 
+
         try {
             const app = initializeApp(firebaseConfig);
             const db = getFirestore(app);
@@ -55,10 +139,117 @@
                     userId = user.uid;
                     await checkUserProfile(userId);
                 } else {
-                    // User logged out
                     showView('view-login');
                 }
             });
+
+            // --- PASSWORD TOGGLE ---
+            window.togglePassword = (inputId, iconId) => {
+                const input = document.getElementById(inputId);
+                const icon = document.getElementById(iconId);
+                if (input.type === "password") {
+                    input.type = "text";
+                    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />`;
+                } else {
+                    input.type = "password";
+                    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />`;
+                }
+            };
+
+            // --- GEMINI AI FUNCTIONS ---
+            
+            // Helper to call Gemini
+            async function callGeminiAPI(prompt, imageBase64 = null) {
+                const apiKey = typeof apiKey !== 'undefined' ? apiKey : manualGeminiKey; 
+                
+                if (!apiKey) {
+                    alert("Gemini API Key missing! Code mein 'manualGeminiKey' bharein.");
+                    return null;
+                }
+
+                const parts = [{ text: prompt }];
+                if (imageBase64) {
+                    const base64Data = imageBase64.split(',')[1];
+                    parts.push({ inlineData: { mimeType: "image/jpeg", data: base64Data } });
+                }
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ role: "user", parts: parts }] })
+                    });
+                    const data = await response.json();
+                    if(data.error) throw new Error(data.error.message);
+                    return data.candidates[0].content.parts[0].text;
+                } catch (e) {
+                    console.error("Gemini Error:", e);
+                    alert("AI Error: " + e.message);
+                    return null;
+                }
+            }
+
+            // 1. Magic Scan (Image -> Details)
+            window.magicScan = async () => {
+                const file = document.getElementById('inp-file').files[0];
+                if (!file) { showToast("Please upload a photo first!", "error"); return; }
+
+                const btn = document.getElementById('btn-magic-scan');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = "✨ Scanning..."; btn.disabled = true;
+
+                try {
+                    const photoBase64 = await compressImage(file);
+                    
+                    const prompt = `Analyze this image of a used item for an Indian marketplace. 
+                    Return ONLY a JSON object (no markdown) with these fields:
+                    {
+                        "name": "Short attractive title (in English)",
+                        "category": "One word category (e.g. Mobile, Furniture)",
+                        "price": "Estimated resale value in INR (number only)",
+                        "description": "A catchy sales description mixing Hindi and English (Hinglish). Mention condition based on visual."
+                    }`;
+
+                    const result = await callGeminiAPI(prompt, photoBase64);
+                    if (result) {
+                        const jsonStr = result.replace(/```json/g, '').replace(/```/g, '').trim();
+                        const data = JSON.parse(jsonStr);
+                        
+                        document.querySelector('#form-sell input[name="name"]').value = data.name;
+                        document.querySelector('#form-sell input[name="price"]').value = data.price;
+                        document.querySelector('#form-sell input[name="category"]').value = data.category;
+                        document.querySelector('#form-sell textarea[name="desc"]').value = data.description;
+                        
+                        showToast("✨ AI ne form bhar diya!", "success");
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast("AI Scan Failed. Try manually.", "error");
+                } finally {
+                    btn.innerHTML = originalText; btn.disabled = false;
+                }
+            };
+
+            // 2. AI Writer (Text -> Description)
+            window.aiWriteDesc = async () => {
+                const name = document.querySelector('#form-sell input[name="name"]').value;
+                const cat = document.querySelector('#form-sell input[name="category"]').value;
+                
+                if(!name) { showToast("Pehle naam likhein", "error"); return; }
+
+                const btn = document.getElementById('btn-ai-write');
+                btn.innerHTML = "✨ Writing..."; btn.disabled = true;
+
+                const prompt = `Write a short, attractive Hinglish sales description for selling a used '${name}' (Category: ${cat}) on a local bazaar app. Keep it under 200 characters.`;
+                
+                const text = await callGeminiAPI(prompt);
+                if(text) {
+                    document.querySelector('#form-sell textarea[name="desc"]').value = text;
+                }
+                
+                btn.innerHTML = "✨ Write for me"; btn.disabled = false;
+            };
+
 
             // --- CORE FUNCTIONS ---
             const checkUserProfile = async (uid) => {
@@ -67,146 +258,115 @@
                 if (docSnap.exists()) {
                     userProfile = docSnap.data();
                     userName = userProfile.name;
+                    if(userProfile.language) setLanguage(userProfile.language);
+                    else { showView('view-language'); return; }
                     showView('view-home');
                     startItemsListener(); 
                     updateUserDisplay();
                     startNotificationListener(uid);
                 } else {
-                    // Profile data missing?
-                    alert("Profile data not found. Please contact support.");
                     showView('view-login');
                 }
             };
 
             const updateUserDisplay = () => {
-                document.querySelectorAll('.user-name-display').forEach(el => el.textContent = userName || 'User');
+                document.querySelectorAll('.user-name-display').forEach(el => el.textContent = userName || 'Guest');
                 document.querySelectorAll('.user-photo-display').forEach(img => img.src = userProfile.photo || 'https://placehold.co/100');
             };
 
-            // --- PASSWORD AUTH LOGIC ---
-            
-            // 1. LOGIN
-            window.handleLogin = async () => {
-                const mobile = document.getElementById('login-mobile').value.trim();
-                const pass = document.getElementById('login-pass').value.trim();
-                const btn = document.getElementById('btn-login');
+            // --- LANGUAGE LOGIC ---
+            window.setLanguage = async (lang) => {
+                currentLang = lang;
+                const t = translations[lang];
+                const setText = (id, text) => { if(document.getElementById(id)) document.getElementById(id).innerText = text; };
+                const setPlace = (id, text) => { if(document.getElementById(id)) document.getElementById(id).placeholder = text; };
 
-                if (mobile.length !== 10) { showToast('Mobile number 10 digit ka hona chahiye', 'error'); return; }
-                if (!pass) { showToast('Password dalein', 'error'); return; }
-
-                btn.innerText = "Checking..."; btn.disabled = true;
-
-                // Fake Email conversion for Firebase
-                const email = `${mobile}@bazaar.com`;
-
-                try {
-                    await signInWithEmailAndPassword(auth, email, pass);
-                    showToast("Login Successful!", 'success');
-                    // onAuthStateChanged will handle redirect
-                } catch (error) {
-                    console.error(error);
-                    let msg = "Login Failed.";
-                    if(error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') msg = "Number ya Password galat hai.";
-                    if(error.code === 'auth/user-not-found') msg = "Ye account nahi mila. Register karein.";
-                    showToast(msg, 'error');
-                    btn.innerText = "Login"; btn.disabled = false;
+                setText('txt-login-title', t.loginTitle);
+                setPlace('login-mobile', t.mobilePlace);
+                setPlace('login-pass', t.passPlace);
+                setText('btn-login', t.loginBtn);
+                setText('txt-create-title', t.createTitle);
+                setPlace('reg-name', t.fullName);
+                setPlace('reg-bio', t.bioPlace);
+                setPlace('reg-address', t.addrPlace);
+                setText('btn-signup', t.createBtn);
+                setText('tab-items', t.tabItems);
+                setText('tab-requests', t.tabReq);
+                
+                if(userId) await updateDoc(doc(db, 'users', userId), { language: lang });
+                if(!document.getElementById('view-language').classList.contains('hidden')) {
+                    showView('view-home'); startItemsListener();
                 }
             };
 
-            // 2. SIGNUP (REGISTER)
+            // --- AUTH UI ---
+            window.handleLogin = async () => {
+                const mobile = document.getElementById('login-mobile').value.trim();
+                const pass = document.getElementById('login-pass').value.trim();
+                if (mobile.length !== 10) { showToast('Invalid Mobile', 'error'); return; }
+                if (!pass) { showToast('Enter Password', 'error'); return; }
+                const email = `${mobile}@bazaar.com`;
+                try { await signInWithEmailAndPassword(auth, email, pass); } 
+                catch (error) { showToast("Login Failed: " + error.code, 'error'); }
+            };
+
             window.handleSignup = async () => {
                 const name = document.getElementById('reg-name').value.trim();
                 const mobile = document.getElementById('reg-mobile').value.trim();
                 const pass = document.getElementById('reg-pass').value.trim();
+                const bio = document.getElementById('reg-bio').value.trim();
                 const address = document.getElementById('reg-address').value.trim();
                 const file = document.getElementById('reg-photo').files[0];
                 const btn = document.getElementById('btn-signup');
 
-                // Validation
-                if (name.length < 3) { showToast('Pura naam likhein', 'error'); return; }
-                if (mobile.length !== 10) { showToast('Mobile number 10 digit ka hona chahiye', 'error'); return; }
-                if (address.length < 5) { showToast('Pura pata (Address) likhein', 'error'); return; }
-                
-                // Strong Password Check
-                if (pass.length < 6) { showToast('Password kam se kam 6 akshar ka ho', 'error'); return; }
-                // Optional: Check for numbers/letters mix
-                // if (!/\d/.test(pass)) { showToast('Password me number bhi hone chahiye', 'error'); return; }
+                if (name.length < 3 || mobile.length !== 10) { showToast('Check details', 'error'); return; }
+                if (pass.length < 6) { showToast('Password min 6 chars', 'error'); return; }
 
-                btn.innerText = "Creating Account..."; btn.disabled = true;
-
-                // 1. Compress Image if exists
+                btn.innerText = "Creating..."; btn.disabled = true;
                 let photoBase64 = null;
                 if (file) {
                     try { photoBase64 = await compressImage(file); } 
                     catch(e) { showToast("Image Error", 'error'); btn.disabled = false; return; }
                 }
-
                 const email = `${mobile}@bazaar.com`;
-
                 try {
-                    // 2. Create Auth User
                     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
                     const user = userCredential.user;
-
-                    // 3. Save Profile Data to Firestore
                     await setDoc(doc(db, 'users', user.uid), {
-                        name, mobile, address, photo: photoBase64,
-                        createdAt: serverTimestamp()
+                        name, mobile, bio, address, photo: photoBase64,
+                        language: 'en', createdAt: serverTimestamp()
                     });
-
-                    // 4. Update Auth Profile Name
                     await updateProfile(user, { displayName: name });
-
-                    showToast("Account Created! Welcome.", 'success');
-                    // onAuthStateChanged will redirect
                 } catch (error) {
-                    console.error(error);
-                    let msg = "Signup Failed.";
-                    if(error.code === 'auth/email-already-in-use') msg = "Ye Number pehle se registered hai. Login karein.";
-                    if(error.code === 'auth/weak-password') msg = "Password bahut kamzor hai.";
-                    showToast(msg, 'error');
-                    btn.innerText = "Create Account"; btn.disabled = false;
+                    showToast(error.message, 'error');
+                    btn.innerText = translations[currentLang].createBtn; btn.disabled = false;
                 }
             };
 
-            window.handleLogout = async () => {
-                await signOut(auth);
-                showToast("Logged Out", 'info');
-                showView('view-login');
-            };
-
-            // --- IMAGE COMPRESSION ---
-            const compressImage = (file) => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
-                    reader.onload = (event) => {
-                        const img = new Image();
-                        img.src = event.target.result;
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 800;
-                            const MAX_HEIGHT = 800;
-                            let width = img.width;
-                            let height = img.height;
-                            if (width > height) {
-                                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                            } else {
-                                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+            // --- NOTIFICATIONS ---
+            const startNotificationListener = (uid) => {
+                const playSound = () => { const a = document.getElementById('notif-sound'); if(a) a.play().catch(()=>{}); };
+                const qSeller = query(collection(db, 'deals'), where('sellerId', '==', uid));
+                onSnapshot(qSeller, (snapshot) => {
+                    if (!snapshot.metadata.fromCache) {
+                        snapshot.docChanges().forEach((change) => {
+                            if (change.type === "added" && change.doc.data().status === 'pending') {
+                                showToast(`🔔 New Order: ${change.doc.data().buyerName}`, 'info'); playSound();
                             }
-                            canvas.width = width;
-                            canvas.height = height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.7));
-                        };
-                        img.onerror = (err) => reject(err);
-                    };
-                    reader.onerror = (err) => reject(err);
+                        });
+                    }
+                });
+                const qBuyer = query(collection(db, 'deals'), where('buyerId', '==', uid));
+                onSnapshot(qBuyer, (snapshot) => {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "modified" && change.doc.data().status === 'accepted') {
+                            showToast(`✅ Deal Confirmed!`, 'success'); playSound();
+                        }
+                    });
                 });
             };
 
-            // --- HOME TABS ---
+            // --- TABS & LISTS ---
             window.switchHomeTab = (tab) => {
                 document.getElementById('tab-items').className = "flex-1 py-3 font-bold text-gray-400 transition";
                 document.getElementById('tab-requests').className = "flex-1 py-3 font-bold text-gray-400 transition";
@@ -214,37 +374,36 @@
                 if(tab === 'items') startItemsListener(); else startRequestsListener();
             };
 
-            // --- LISTINGS ---
             window.startItemsListener = () => {
                 const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
                 onSnapshot(q, (snap) => {
                     const list = document.getElementById('items-grid');
                     list.innerHTML = '';
-                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400 py-10">Koi saman nahi hai.</p>'; return; }
-                    
+                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400 py-10">Empty.</p>'; return; }
                     snap.forEach(d => {
                         const item = d.data();
-                        if (item.status !== 'sold') {
-                            const div = document.createElement('div');
-                            div.className = 'bg-white rounded-2xl shadow-sm hover:shadow-lg transition overflow-hidden border border-gray-100 cursor-pointer fade-in';
-                            div.onclick = (e) => { if(!e.target.closest('button')) showItemDetails(d.id, item.sellerId); };
-                            div.innerHTML = `
-                                <div class="relative h-48 overflow-hidden">
-                                    <img src="${item.imageData}" class="w-full h-full object-cover" alt="${item.name}">
-                                    <div class="absolute bottom-0 w-full bg-gradient-to-t from-black/70 to-transparent p-3">
-                                        <span class="text-white font-bold text-lg">₹ ${item.price}</span>
-                                    </div>
+                        const isSold = item.status === 'sold';
+                        const div = document.createElement('div');
+                        div.className = `bg-white rounded-2xl shadow-sm hover:shadow-lg transition overflow-hidden border border-gray-100 cursor-pointer fade-in relative ${isSold ? 'opacity-75' : ''}`;
+                        if(!isSold) div.onclick = (e) => { if(!e.target.closest('button')) showItemDetails(d.id, item.sellerId); };
+                        let soldOverlay = isSold ? `<div class="sold-overlay"><div class="sold-badge">${translations[currentLang].soldOut}</div></div>` : '';
+                        div.innerHTML = `
+                            ${soldOverlay}
+                            <div class="relative h-48 overflow-hidden">
+                                <img src="${item.imageData}" class="w-full h-full object-cover">
+                                <div class="absolute bottom-0 w-full bg-gradient-to-t from-black/70 to-transparent p-3">
+                                    <span class="text-white font-bold text-lg">₹ ${item.price}</span>
                                 </div>
-                                <div class="p-4">
-                                    <h3 class="font-bold text-gray-800 truncate">${item.name}</h3>
-                                    <p class="text-xs text-gray-500 mb-2">${item.category}</p>
-                                    <div class="flex justify-between items-center mt-2">
-                                        <span class="text-xs text-gray-400">By: ${item.sellerName ? item.sellerName.split(' ')[0] : 'User'}</span>
-                                        <button class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">Dekhein</button>
-                                    </div>
-                                </div>`;
-                            list.appendChild(div);
-                        }
+                            </div>
+                            <div class="p-4">
+                                <h3 class="font-bold text-gray-800 truncate">${item.name}</h3>
+                                <p class="text-xs text-gray-500 mb-2">${item.category}</p>
+                                <div class="flex justify-between items-center mt-2">
+                                    <span class="text-xs text-gray-400">By: ${item.sellerName.split(' ')[0]}</span>
+                                    ${!isSold ? `<button class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">Buy</button>` : ''}
+                                </div>
+                            </div>`;
+                        list.appendChild(div);
                     });
                 });
             };
@@ -254,51 +413,79 @@
                 onSnapshot(q, (snap) => {
                     const list = document.getElementById('items-grid');
                     list.innerHTML = '';
-                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400 py-10">Koi maang nahi hai.</p>'; return; }
+                    if(snap.empty) { list.innerHTML = '<p class="col-span-full text-center text-gray-400 py-10">No requests.</p>'; return; }
                     snap.forEach(d => {
                         const req = d.data();
                         const div = document.createElement('div');
                         div.className = 'bg-white rounded-2xl p-5 shadow-sm border border-orange-100 relative fade-in';
                         div.innerHTML = `
-                            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-xs px-2 py-1 rounded-bl-xl font-bold">CHAHIYE</div>
+                            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-xs px-2 py-1 rounded-bl-xl font-bold">WANTED</div>
                             <h3 class="font-bold text-lg text-gray-800">${req.itemName}</h3>
                             <p class="text-gray-600 text-sm mt-1">${req.description}</p>
-                            <div class="flex items-center gap-2 mt-4 pt-3 border-t border-gray-50">
-                                <img src="${req.requesterPhoto || 'https://placehold.co/50'}" class="w-8 h-8 rounded-full object-cover">
-                                <div class="text-xs">
-                                    <p class="font-bold">${req.requesterName}</p>
-                                    <p class="text-gray-400">ko chahiye</p>
+                            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
+                                <div class="flex items-center gap-2">
+                                    <img src="${req.requesterPhoto || 'https://placehold.co/50'}" class="w-8 h-8 rounded-full object-cover">
+                                    <p class="text-xs font-bold">${req.requesterName}</p>
                                 </div>
+                                ${req.requesterId !== userId ? 
+                                `<button onclick="openResponseModal('${d.id}', '${req.requesterId}', '${req.itemName}')" class="bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-bold shadow">${translations[currentLang].iHave}</button>` : ''}
                             </div>`;
                         list.appendChild(div);
                     });
                 });
             };
 
-            // --- SUBMIT FORMS ---
+            // --- I HAVE THIS ---
+            window.openResponseModal = (reqId, requesterId, itemName) => {
+                document.getElementById('resp-req-id').value = reqId;
+                document.getElementById('resp-requester-id').value = requesterId;
+                document.getElementById('resp-item-name').value = itemName;
+                document.getElementById('modal-response').classList.remove('hidden');
+            };
+
+            window.submitResponse = async () => {
+                const reqId = document.getElementById('resp-req-id').value;
+                const requesterId = document.getElementById('resp-requester-id').value;
+                const itemName = document.getElementById('resp-item-name').value;
+                const condition = document.getElementById('resp-condition').value;
+                const price = document.getElementById('resp-price').value;
+                const file = document.getElementById('resp-photo').files[0];
+
+                if(!price || !condition) { showToast("Enter Price & Condition", 'error'); return; }
+                let photoBase64 = null;
+                if (file) { try { photoBase64 = await compressImage(file); } catch(e){} }
+
+                await addDoc(collection(db, 'deals'), {
+                    itemId: reqId, sellerId: userId, sellerName: userName,
+                    buyerId: requesterId, buyerName: 'Requester', itemName: itemName,
+                    offerPrice: price, offerCondition: condition, offerPhoto: photoBase64,
+                    status: 'proposal_sent', type: 'request_response', createdAt: serverTimestamp()
+                });
+                document.getElementById('modal-response').classList.add('hidden');
+                showToast("Proposal Sent!", 'success');
+            };
+
+            // --- SUBMIT ---
             window.submitSell = async (e) => {
                 e.preventDefault();
                 const form = document.getElementById('form-sell');
                 const file = document.getElementById('inp-file').files[0];
-                if(!file) { showToast('Photo zaroori hai', 'error'); return; }
-                
-                const btn = e.target.querySelector('button');
-                btn.innerText = "Uploading..."; btn.disabled = true;
+                if(!file) { showToast('Photo required', 'error'); return; }
+                const btn = document.getElementById('btn-post-ad');
+                btn.disabled = true; btn.innerText = "Uploading...";
 
                 try {
                     const photoBase64 = await compressImage(file);
                     await addDoc(collection(db, 'items'), {
                         name: form['name'].value, price: Number(form['price'].value),
                         category: form['category'].value, description: form['desc'].value,
-                        imageData: photoBase64, sellerId: userId, sellerName: userName, sellerPhoto: userProfile.photo,
+                        imageData: photoBase64, sellerId: userId, sellerName: userName, 
                         status: 'available', createdAt: serverTimestamp()
                     });
                     form.reset();
-                    btn.innerText = "Post Ad"; btn.disabled = false;
-                    showView('view-home');
-                    switchHomeTab('items');
-                    showToast("Item Listed!", 'success');
-                } catch(err) { showToast("Error: " + err.message, 'error'); btn.disabled = false; }
+                    btn.disabled = false; btn.innerText = "Post Ad";
+                    showView('view-home'); switchHomeTab('items');
+                } catch(err) { showToast(err.message, 'error'); btn.disabled = false; }
             };
 
             window.submitRequest = async (e) => {
@@ -311,19 +498,14 @@
                     createdAt: serverTimestamp()
                 });
                 document.getElementById('form-request').reset();
-                showView('view-home');
-                switchHomeTab('requests');
-                showToast("Request Posted!", 'success');
+                showView('view-home'); switchHomeTab('requests');
             };
 
-            // --- DEAL LOGIC ---
-            let dealsUnsub;
-            let activeDealId = null; 
-
+            // --- DETAILS & DEALS ---
+            let activeDealId = null;
             window.showItemDetails = async (itemId, sellerId) => {
                 const iSnap = await getDoc(doc(db, 'items', itemId));
                 const sSnap = await getDoc(doc(db, 'users', sellerId));
-                
                 if(!iSnap.exists()) return;
                 const item = iSnap.data();
                 const seller = sSnap.exists() ? sSnap.data() : {name:'User', mobile:'Hidden'};
@@ -334,53 +516,35 @@
                 document.getElementById('det-desc').innerText = item.description || "No description";
                 document.getElementById('det-seller-photo').src = seller.photo || 'https://placehold.co/100';
                 document.getElementById('det-seller-name').innerText = seller.name;
-                document.getElementById('det-seller-mobile').innerText = seller.mobile;
+                if (document.getElementById('det-seller-mobile')) document.getElementById('det-seller-mobile').innerText = seller.mobile;
+                document.getElementById('det-seller-bio').innerText = seller.bio || "";
                 
                 const controls = document.getElementById('deal-controls');
-                controls.innerHTML = '<p class="text-sm text-gray-400">Loading...</p>';
+                controls.innerHTML = '';
                 
-                if(dealsUnsub) dealsUnsub();
                 const q = query(collection(db, 'deals'), where('itemId', '==', itemId));
-                
-                dealsUnsub = onSnapshot(q, (snap) => {
+                onSnapshot(q, (snap) => {
                     controls.innerHTML = '';
-                    
                     if (sellerId === userId) {
-                        // SELLER VIEW
-                        controls.innerHTML = '<h3 class="font-bold mb-2 text-sm">Requests Received:</h3>';
-                        if(snap.empty) controls.innerHTML += '<p class="text-xs text-gray-500">Koi request nahi.</p>';
-                        
                         snap.forEach(d => {
                             const deal = d.data();
-                            activeDealId = d.id; 
-                            
                             if(deal.status === 'pending') {
-                                controls.innerHTML += `
-                                <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-2 flex justify-between items-center">
-                                    <div><p class="font-bold text-sm text-indigo-900">${deal.buyerName}</p></div>
-                                    <button onclick="acceptDeal('${d.id}')" class="bg-indigo-600 text-white px-3 py-1 rounded text-xs shadow">Accept</button>
-                                </div>`;
-                            } else if(deal.status === 'accepted') {
-                                controls.innerHTML += `<div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2"><p class="text-green-800 text-xs font-bold">Deal Accepted with ${deal.buyerName}</p><p class="text-green-700 text-xs mt-1">Milaap: ${deal.meetDate} at ${deal.meetTime} (${deal.meetPlace})</p></div>`;
+                                controls.innerHTML += `<div class="bg-indigo-50 p-3 rounded-lg border flex justify-between items-center"><div><p class="font-bold text-sm">${deal.buyerName}</p></div><button onclick="acceptDeal('${d.id}', '${itemId}')" class="bg-indigo-600 text-white px-3 py-1 rounded text-xs">Accept</button></div>`;
                             }
                         });
                     } else {
-                        // BUYER VIEW
                         const myDeal = snap.docs.find(d => d.data().buyerId === userId);
                         if (!myDeal) {
-                            controls.innerHTML = `<button onclick="sendDealRequest('${itemId}', '${sellerId}')" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Yes, I want to buy</button>`;
+                            controls.innerHTML = `<button onclick="sendDealRequest('${itemId}', '${sellerId}')" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Yes, I want to buy</button>`;
                         } else {
-                            const deal = myDeal.data();
-                            activeDealId = myDeal.id; 
-                            
-                            if(deal.status === 'pending') controls.innerHTML = `<div class="bg-yellow-100 p-4 rounded-xl text-center text-yellow-800 font-bold border border-yellow-200">Request Bheji Gayi (Pending)</div>`;
-                            else if(deal.status === 'accepted') controls.innerHTML = `<div class="bg-green-100 p-4 rounded-xl text-center border border-green-200"><p class="text-green-800 font-bold text-lg">🎉 Deal Confirmed!</p><p class="text-sm text-green-700 mt-1">${deal.meetDate} at ${deal.meetTime}<br>@ ${deal.meetPlace}</p></div>`;
+                            const status = myDeal.data().status;
+                            activeDealId = myDeal.id;
+                            if(status === 'pending') controls.innerHTML = `<div class="bg-yellow-100 p-3 rounded-xl text-center font-bold">Request Sent</div>`;
+                            else if(status === 'accepted') controls.innerHTML = `<div class="bg-green-100 p-3 rounded-xl text-center font-bold">Deal Confirmed!</div>`;
                         }
                     }
                     if(activeDealId) setupChat(activeDealId);
-                    else document.getElementById('chat-messages').innerHTML = '<p class="text-center text-xs text-gray-400 mt-4">Request bhejne ke baad chat karein.</p>';
                 });
-
                 showView('view-details');
             };
 
@@ -393,19 +557,21 @@
                 showToast("Request Sent!", 'success');
             };
 
-            window.acceptDeal = (dealId) => {
+            window.acceptDeal = (dealId, itemId) => {
                 document.getElementById('modal-deal-id').value = dealId;
+                document.getElementById('modal-item-id').value = itemId || '';
                 document.getElementById('modal-logistics').classList.remove('hidden');
             };
 
             window.confirmDeal = async () => {
                 const dealId = document.getElementById('modal-deal-id').value;
+                const itemId = document.getElementById('modal-item-id').value;
                 const date = document.getElementById('deal-date').value;
                 const time = document.getElementById('deal-time').value;
                 const place = document.getElementById('deal-place').value;
-                if(!date || !time || !place) { showToast("Details bharein", 'error'); return; }
-                
+                if(!date || !time || !place) { showToast("Fill details", 'error'); return; }
                 await updateDoc(doc(db, 'deals', dealId), { status: 'accepted', meetDate: date, meetTime: time, meetPlace: place });
+                if(itemId) await updateDoc(doc(db, 'items', itemId), { status: 'sold' });
                 document.getElementById('modal-logistics').classList.add('hidden');
                 showToast("Deal Confirmed!", 'success');
             };
@@ -413,14 +579,12 @@
             const setupChat = (dealId) => {
                 const chatDiv = document.getElementById('chat-messages');
                 const q = query(collection(db, 'deals', dealId, 'messages'), orderBy('createdAt', 'asc'));
-                
                 onSnapshot(q, (snap) => {
                     chatDiv.innerHTML = '';
-                    if(snap.empty) chatDiv.innerHTML = '<p class="text-center text-xs text-gray-400 mt-4">Start discussion...</p>';
                     snap.forEach(d => {
                         const msg = d.data();
                         const isMe = msg.senderId === userId;
-                        chatDiv.innerHTML += `<div class="flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2 fade-in"><div class="px-3 py-2 rounded-2xl text-xs max-w-[80%] ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border text-gray-700 rounded-bl-none'}">${msg.text}</div></div>`;
+                        chatDiv.innerHTML += `<div class="flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2"><div class="px-3 py-2 rounded-2xl text-xs max-w-[80%] ${isMe ? 'bg-indigo-600 text-white' : 'bg-white border'}">${msg.text}</div></div>`;
                     });
                     chatDiv.scrollTop = chatDiv.scrollHeight;
                 });
@@ -428,106 +592,89 @@
 
             window.sendChat = async (e) => {
                 e.preventDefault();
-                if(!activeDealId) { showToast("Pehle Deal Request bhejein", 'error'); return; }
                 const txt = document.getElementById('inp-chat').value.trim();
-                if(!txt) return;
-                
+                if(!txt || !activeDealId) return;
                 await addDoc(collection(db, 'deals', activeDealId, 'messages'), { text: txt, senderId: userId, createdAt: serverTimestamp() });
-                await updateDoc(doc(db, 'deals', activeDealId), { lastMsg: txt, lastMsgSender: userId, lastMsgTime: serverTimestamp() });
+                await updateDoc(doc(db, 'deals', activeDealId), { lastMsg: txt, lastMsgSender: userId });
                 document.getElementById('inp-chat').value = '';
             };
 
-            const playNotificationSound = () => {
-                const audio = document.getElementById('notif-sound');
-                if(audio) audio.play().catch(e => {});
-            };
-
-            const startNotificationListener = (uid) => {
-                const qSeller = query(collection(db, 'deals'), where('sellerId', '==', uid));
-                onSnapshot(qSeller, (snapshot) => {
-                    if (!snapshot.metadata.fromCache) {
-                        snapshot.docChanges().forEach((change) => {
-                            if (change.type === "added" && change.doc.data().status === 'pending') {
-                                showToast(`🔔 New Order: ${change.doc.data().buyerName}`, 'info');
-                                playNotificationSound();
-                            }
-                            if (change.type === "modified" && change.doc.data().lastMsg && change.doc.data().lastMsgSender !== uid) {
-                                showToast(`💬 Message from Buyer`, 'info');
-                                playNotificationSound();
-                            }
-                        });
-                    }
-                });
-                const qBuyer = query(collection(db, 'deals'), where('buyerId', '==', uid));
-                onSnapshot(qBuyer, (snapshot) => {
-                    snapshot.docChanges().forEach((change) => {
-                        if (change.type === "modified") {
-                            if (change.doc.data().status === 'accepted') {
-                                showToast(`✅ Deal Confirmed!`, 'success');
-                                playNotificationSound();
-                            }
-                            if (change.doc.data().lastMsg && change.doc.data().lastMsgSender !== uid) {
-                                showToast(`💬 Seller Message`, 'info');
-                                playNotificationSound();
-                            }
-                        }
-                    });
-                });
-            };
-
-            // --- FULL PROFILE ---
+            // --- PROFILE ---
             window.showFullProfile = async () => {
                  document.getElementById('prof-img').src = userProfile.photo || 'https://placehold.co/150';
                  document.getElementById('prof-name').innerText = userProfile.name;
-                 document.getElementById('prof-mobile').innerText = userProfile.mobile;
-                 document.getElementById('prof-address').innerText = userProfile.address;
+                 document.getElementById('prof-bio').innerText = userProfile.bio || 'No Bio';
 
-                 const sentQ = query(collection(db, 'deals'), where('buyerId', '==', userId), orderBy('createdAt', 'desc'));
-                 const receivedQ = query(collection(db, 'deals'), where('sellerId', '==', userId), orderBy('createdAt', 'desc'));
+                 // Update Stats
+                 const itemsQ = query(collection(db, 'items'), where('sellerId', '==', userId));
+                 onSnapshot(itemsQ, s => {
+                     if(document.getElementById('stat-items')) document.getElementById('stat-items').innerText = s.size;
+                 });
+
+                 const sentQ = query(collection(db, 'deals'), where('buyerId', '==', userId));
+                 const receivedQ = query(collection(db, 'deals'), where('sellerId', '==', userId));
 
                  onSnapshot(sentQ, (snap) => {
-                    let content = '<h3 class="font-bold text-indigo-700 mt-4 mb-2">Maine Jo Maanga (Sent)</h3>';
-                    if(snap.empty) content += '<p class="text-xs text-gray-400">Koi request nahi bheji.</p>';
-                    snap.forEach(d => {
-                        const deal = d.data();
-                        const color = deal.status === 'accepted' ? 'green' : 'yellow';
-                        content += `
-                        <div class="bg-white p-3 rounded-lg border-l-4 border-${color}-500 shadow-sm mb-2 cursor-pointer" onclick="showItemDetails('${deal.itemId}', '${deal.sellerId}')">
-                            <div class="flex justify-between"><p class="font-bold text-sm">${deal.itemName || 'Item'}</p><span class="text-xs bg-${color}-100 text-${color}-700 px-2 py-0.5 rounded capitalize">${deal.status}</span></div>
-                            <p class="text-xs text-gray-500">Seller Page</p>
-                        </div>`;
+                    let deals = []; snap.forEach(d => deals.push({id: d.id, ...d.data()}));
+                    deals.sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+                    
+                    // SAFE DOM UPDATE
+                    if(document.getElementById('stat-bought')) document.getElementById('stat-bought').innerText = deals.length;
+
+                    let html = '';
+                    deals.forEach(deal => {
+                        if (deal.type === 'request_response' && deal.status === 'proposal_sent') {
+                            html += `<div class="bg-orange-50 p-3 rounded-lg border border-orange-200 mb-2"><p class="text-sm font-bold">Offer: ${deal.itemName}</p><p class="text-xs">₹${deal.offerPrice}</p><button onclick="acceptDeal('${deal.id}', null)" class="mt-2 bg-green-600 text-white px-3 py-1 rounded text-xs">Accept</button></div>`;
+                        } else {
+                            html += `<div class="bg-white p-3 rounded-lg shadow-sm mb-2 border"><p class="font-bold text-sm">${deal.itemName || 'Item'}</p><span class="text-xs bg-gray-100 px-2 rounded">${deal.status}</span></div>`;
+                        }
                     });
-                    document.getElementById('sent-deals-area').innerHTML = content;
+                    const sentArea = document.getElementById('sent-deals-area');
+                    if(sentArea) sentArea.innerHTML = html || '<p class="text-xs text-gray-400">No Activity</p>';
                  });
 
                  onSnapshot(receivedQ, (snap) => {
-                    let content = '<h3 class="font-bold text-indigo-700 mt-4 mb-2">Mujhse Jo Maanga (Received)</h3>';
-                    if(snap.empty) content += '<p class="text-xs text-gray-400">Koi request nahi aayi.</p>';
-                    snap.forEach(d => {
-                        const deal = d.data();
-                        const color = deal.status === 'accepted' ? 'green' : 'yellow';
-                        content += `
-                        <div class="bg-white p-3 rounded-lg border-l-4 border-${color}-500 shadow-sm mb-2 cursor-pointer" onclick="showItemDetails('${deal.itemId}', '${deal.sellerId}')">
-                            <div class="flex justify-between"><p class="font-bold text-sm">${deal.itemName || 'Item'}</p><span class="text-xs bg-${color}-100 text-${color}-700 px-2 py-0.5 rounded capitalize">${deal.status}</span></div>
-                            <p class="text-xs text-gray-500">Buyer: ${deal.buyerName}</p>
-                        </div>`;
-                    });
-                    document.getElementById('received-deals-area').innerHTML = content;
-                 });
+                    let deals = []; snap.forEach(d => deals.push({id: d.id, ...d.data()}));
+                    deals.sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+                    
+                    // SAFE DOM UPDATE
+                    if(document.getElementById('stat-sold')) document.getElementById('stat-sold').innerText = deals.filter(d => d.status === 'accepted').length;
 
+                    let html = '';
+                    deals.forEach(deal => {
+                        html += `<div class="bg-white p-3 rounded-lg shadow-sm mb-2 border"><p class="font-bold text-sm">${deal.itemName || 'Item'}</p><p class="text-xs">Buyer: ${deal.buyerName}</p><span class="text-xs bg-gray-100 px-2 rounded">${deal.status}</span></div>`;
+                    });
+                    const receivedArea = document.getElementById('received-deals-area');
+                    if(receivedArea) receivedArea.innerHTML = html || '<p class="text-xs text-gray-400">No Activity</p>';
+                 });
                  showView('view-profile-full');
+            };
+
+            const compressImage = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader(); reader.readAsDataURL(file);
+                    reader.onload = (e) => {
+                        const img = new Image(); img.src = e.target.result;
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX = 800; let w = img.width, h = img.height;
+                            if (w > h) { if (w > MAX) { h *= MAX/w; w = MAX; } } else { if (h > MAX) { w *= MAX/h; h = MAX; } }
+                            canvas.width = w; canvas.height = h;
+                            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', 0.7));
+                        };
+                    };
+                });
             };
 
             window.showView = (id) => {
                 document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
                 document.getElementById(id).classList.remove('hidden');
-                window.scrollTo(0,0);
             };
-
+            window.handleLogout = () => { signOut(auth); showView('view-login'); };
             window.showToast = (msg, type) => {
                 const t = document.getElementById('toast');
-                const color = type === 'error' ? 'bg-red-500' : (type === 'success' ? 'bg-green-500' : 'bg-indigo-600');
-                t.innerHTML = `<div class="${color} text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 transform transition-all duration-300"><span>${msg}</span></div>`;
+                t.innerHTML = `<div class="${type==='error'?'bg-red-500':'bg-green-500'} text-white px-4 py-3 rounded shadow">${msg}</div>`;
                 t.classList.remove('translate-y-20', 'opacity-0');
                 setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 4000);
             };
@@ -537,180 +684,259 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen relative pb-20">
 
-    <audio id="notif-sound" src="data:audio/wav;base64,UklGRl9vT1ZAVX..."></audio> 
     <div id="toast" class="fixed top-5 right-5 z-50 transition-all duration-500 translate-y-20 opacity-0"></div>
-
-    <!-- LOADING -->
     <div id="loading-screen" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-        <p class="text-gray-500">Loading Bazaar...</p>
+        <!-- LOGO IN LOADER -->
+        <svg class="w-20 h-20 mb-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+        <p class="text-indigo-900 font-bold text-xl">Bazaar AI</p>
+    </div>
+    <audio id="notif-sound" src="data:audio/wav;base64,UklGRl9vT1ZAVX..."></audio>
+
+    <!-- LANGUAGE SELECTION -->
+    <div id="view-language" class="app-view hidden min-h-screen flex flex-col items-center justify-center p-6 bg-white">
+        <h2 class="text-2xl font-bold mb-8">Select Language / भाषा चुनें</h2>
+        <div class="space-y-4 w-full max-w-sm">
+            <button onclick="setLanguage('en')" class="w-full p-4 border-2 border-indigo-100 rounded-xl hover:bg-indigo-50 font-bold text-lg flex justify-between items-center">English <span>🇬🇧</span></button>
+            <button onclick="setLanguage('hi')" class="w-full p-4 border-2 border-orange-100 rounded-xl hover:bg-orange-50 font-bold text-lg flex justify-between items-center">हिंदी (Hindi) <span>🇮🇳</span></button>
+        </div>
     </div>
 
-    <!-- MODAL LOGISTICS -->
+    <!-- LOGISTICS MODAL -->
     <div id="modal-logistics" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl animate-bounce-in">
-            <h3 class="font-bold text-lg mb-4 text-indigo-900">Confirm Deal</h3>
-            <input type="hidden" id="modal-deal-id">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+            <h3 class="font-bold text-lg mb-4 text-indigo-900">Confirm Deal Details</h3>
+            <input type="hidden" id="modal-deal-id"><input type="hidden" id="modal-item-id">
             <div class="space-y-3">
                 <div class="flex gap-2">
-                    <div class="w-1/2"><label class="text-xs font-bold text-gray-500">Date</label><input type="date" id="deal-date" class="w-full p-2 border rounded-xl bg-slate-50"></div>
-                    <div class="w-1/2"><label class="text-xs font-bold text-gray-500">Time</label><input type="time" id="deal-time" class="w-full p-2 border rounded-xl bg-slate-50"></div>
+                    <input type="date" id="deal-date" class="w-1/2 p-2 border rounded-xl">
+                    <input type="time" id="deal-time" class="w-1/2 p-2 border rounded-xl">
                 </div>
-                <div><label class="text-xs font-bold text-gray-500">Location</label><input id="deal-place" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Address"></div>
+                <input id="deal-place" class="w-full p-3 border rounded-xl" placeholder="Location">
             </div>
             <div class="flex gap-3 mt-6">
-                <button onclick="document.getElementById('modal-logistics').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl">Cancel</button>
-                <button onclick="confirmDeal()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold">Confirm</button>
+                <button onclick="document.getElementById('modal-logistics').classList.add('hidden')" class="flex-1 py-2 bg-gray-200 rounded-xl">Cancel</button>
+                <button onclick="confirmDeal()" class="flex-1 py-2 bg-green-600 text-white rounded-xl font-bold">Confirm</button>
             </div>
         </div>
     </div>
 
-    <!-- 1. LOGIN (Updated with Password) -->
+    <!-- RESPONSE MODAL -->
+    <div id="modal-response" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+            <h3 class="font-bold text-lg mb-2 text-indigo-900">I Have This Item</h3>
+            <input type="hidden" id="resp-req-id"><input type="hidden" id="resp-requester-id"><input type="hidden" id="resp-item-name">
+            <div class="space-y-3">
+                <input id="resp-price" type="number" class="w-full p-3 border rounded-xl" placeholder="My Price (₹)">
+                <input id="resp-condition" class="w-full p-3 border rounded-xl" placeholder="Condition">
+                <div class="relative h-24 bg-slate-50 border-2 border-dashed rounded-xl flex items-center justify-center">
+                    <input id="resp-photo" type="file" class="absolute inset-0 opacity-0 w-full h-full"><span class="text-xs text-gray-400">Photo (Optional)</span>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="document.getElementById('modal-response').classList.add('hidden')" class="flex-1 py-2 bg-gray-200 rounded-xl">Cancel</button>
+                <button onclick="submitResponse()" class="flex-1 py-2 bg-green-600 text-white rounded-xl font-bold">Send Offer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIN -->
     <div id="view-login" class="app-view hidden min-h-screen flex flex-col items-center justify-center p-6 bg-white">
-        <div class="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mb-6 text-3xl">🛍️</div>
-        <h1 class="text-3xl font-bold text-slate-900 mb-8">Bazaar Login</h1>
+        <!-- LOGO -->
+        <div class="w-20 h-20 bg-theme rounded-3xl flex items-center justify-center mb-6 text-white shadow-xl shadow-indigo-200 transform -rotate-6">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+        </div>
+        
+        <h1 id="txt-login-title" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-600 mb-8">Bazaar AI</h1>
         <div class="w-full max-w-sm space-y-4">
-            <input id="login-mobile" type="tel" class="w-full p-4 border rounded-xl text-lg bg-slate-50 outline-none focus:border-indigo-500" placeholder="Mobile Number">
-            <input id="login-pass" type="password" class="w-full p-4 border rounded-xl text-lg bg-slate-50 outline-none focus:border-indigo-500" placeholder="Password">
-            <button id="btn-login" onclick="handleLogin()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-xl shadow-indigo-200">Login</button>
-            <p class="text-center text-gray-500 mt-4">Account nahi hai? <span onclick="showView('view-register')" class="text-indigo-600 font-bold cursor-pointer">Naya Banayein</span></p>
-        </div>
-    </div>
-
-    <!-- 2. REGISTER (New Account) -->
-    <div id="view-register" class="app-view hidden min-h-screen p-6 bg-white flex flex-col justify-center">
-        <h2 class="text-2xl font-bold mb-6 text-center">Create Account</h2>
-        <div class="max-w-sm mx-auto w-full space-y-4">
-            <div class="relative w-24 h-24 mx-auto mb-6 bg-slate-100 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
-                <input id="reg-photo" type="file" class="absolute inset-0 opacity-0 z-10 w-full h-full">
-                <span class="text-xs text-gray-400">Photo</span>
+            <input id="login-mobile" type="tel" class="w-full p-4 border-2 border-gray-100 rounded-2xl text-lg focus:border-indigo-500 outline-none transition-colors" placeholder="Mobile Number">
+            
+            <!-- PASSWORD WITH TOGGLE -->
+            <div class="relative">
+                <input id="login-pass" type="password" class="w-full p-4 border-2 border-gray-100 rounded-2xl text-lg focus:border-indigo-500 outline-none transition-colors" placeholder="Password">
+                <button onclick="togglePassword('login-pass', 'icon-login-eye')" class="absolute right-4 top-4 text-gray-400">
+                    <svg id="icon-login-eye" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
             </div>
-            <input id="reg-name" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Full Name">
-            <input id="reg-mobile" type="tel" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Mobile Number">
-            <input id="reg-pass" type="password" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Password (Min 6 chars)">
-            <textarea id="reg-address" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="City / Address"></textarea>
-            <button id="btn-signup" onclick="handleSignup()" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Create Account</button>
-            <p class="text-center text-gray-500 mt-4">Already have account? <span onclick="showView('view-login')" class="text-indigo-600 font-bold cursor-pointer">Login</span></p>
+
+            <button id="btn-login" onclick="handleLogin()" class="w-full bg-theme text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:scale-[1.02] transition-transform">Login</button>
+            <p class="text-center text-gray-500 mt-4"><span id="txt-no-acc">No account?</span> <span onclick="showView('view-register')" class="text-indigo-600 font-bold cursor-pointer hover:underline">Create New</span></p>
         </div>
     </div>
 
-    <!-- 4. HOME -->
+    <!-- REGISTER -->
+    <div id="view-register" class="app-view hidden min-h-screen p-6 bg-white flex flex-col justify-center">
+        <h2 id="txt-create-title" class="text-3xl font-bold mb-6 text-center text-indigo-900">Create Account</h2>
+        <div class="max-w-sm mx-auto w-full space-y-4">
+            <div class="relative w-24 h-24 mx-auto mb-4 bg-indigo-50 rounded-full border-2 border-dashed border-indigo-300 flex items-center justify-center group cursor-pointer">
+                <input id="reg-photo" type="file" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer">
+                <span class="text-2xl group-hover:scale-110 transition-transform">📸</span>
+            </div>
+            <input id="reg-name" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Full Name">
+            <input id="reg-mobile" type="tel" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Mobile">
+            
+            <!-- REG PASS TOGGLE -->
+            <div class="relative">
+                <input id="reg-pass" type="password" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Password (Min 6)">
+                <button onclick="togglePassword('reg-pass', 'icon-reg-eye')" class="absolute right-4 top-4 text-gray-400">
+                    <svg id="icon-reg-eye" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
+            </div>
+
+            <input id="reg-bio" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Bio">
+            <textarea id="reg-address" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Address"></textarea>
+            <button id="btn-signup" onclick="handleSignup()" class="w-full bg-green-600 text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-green-700">Create Account</button>
+            <p class="text-center text-gray-500 mt-4"><span onclick="showView('view-login')" class="text-indigo-600 font-bold cursor-pointer">Login</span></p>
+        </div>
+    </div>
+
+    <!-- HOME -->
     <div id="view-home" class="app-view hidden">
         <nav class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b flex justify-between items-center px-4 h-16 shadow-sm">
-            <div class="font-bold text-xl text-indigo-700 flex items-center gap-2"><span>🛍️</span> Bazaar</div>
-            <div onclick="showFullProfile()" class="flex items-center gap-2 cursor-pointer bg-indigo-50 py-1.5 px-3 rounded-full border border-indigo-100">
-                <img class="w-6 h-6 rounded-full object-cover user-photo-display" src="">
+            <div class="font-extrabold text-xl text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-600">Bazaar AI</div>
+            <div onclick="showFullProfile()" class="flex items-center gap-2 cursor-pointer bg-indigo-50 py-1.5 px-3 rounded-full border border-indigo-100 hover:bg-indigo-100 transition">
+                <img class="w-7 h-7 rounded-full object-cover user-photo-display border border-indigo-200" src="">
                 <span class="text-sm font-bold text-indigo-900 user-name-display">User</span>
             </div>
         </nav>
         <div class="flex border-b bg-white sticky top-16 z-30 shadow-sm">
-            <button id="tab-items" onclick="switchHomeTab('items')" class="flex-1 py-3 font-bold text-indigo-600 border-b-2 border-indigo-600 transition">बाज़ार (Items)</button>
-            <button id="tab-requests" onclick="switchHomeTab('requests')" class="flex-1 py-3 font-bold text-gray-400 transition">मांग (Requests)</button>
+            <button id="tab-items" onclick="switchHomeTab('items')" class="flex-1 py-3 font-bold text-indigo-600 border-b-2 border-indigo-600 transition">Items</button>
+            <button id="tab-requests" onclick="switchHomeTab('requests')" class="flex-1 py-3 font-bold text-gray-400 transition">Requests</button>
         </div>
         <main class="max-w-5xl mx-auto px-4 py-6 pb-24">
             <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </main>
         <div class="fixed bottom-24 right-6 flex flex-col gap-4 z-30">
-            <button onclick="showView('view-request-add')" class="w-12 h-12 bg-white text-orange-500 rounded-full shadow-lg border border-orange-100 flex items-center justify-center transform hover:scale-110 transition" title="Ask Item">📢</button>
-            <button onclick="showView('view-sell')" class="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl shadow-indigo-300 flex items-center justify-center text-2xl transform hover:scale-110 transition">➕</button>
+            <button onclick="showView('view-request-add')" class="w-12 h-12 bg-white text-orange-500 rounded-full shadow-lg border border-orange-100 flex items-center justify-center text-lg hover:scale-110 transition">📢</button>
+            <button onclick="showView('view-sell')" class="w-14 h-14 bg-theme text-white rounded-full shadow-xl shadow-purple-300 flex items-center justify-center text-2xl hover:scale-110 transition">➕</button>
         </div>
     </div>
 
-    <!-- 5. SELL -->
-    <div id="view-sell" class="app-view hidden bg-white min-h-screen">
-        <div class="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-40">
-            <button onclick="showView('view-home')" class="p-2 rounded-full hover:bg-slate-100">⬅</button>
-            <h2 class="font-bold text-xl">Sell Item</h2>
-        </div>
-        <div class="p-6 max-w-lg mx-auto">
-            <form id="form-sell" onsubmit="submitSell(event)" class="space-y-4">
-                <div class="relative h-40 bg-slate-50 border-2 border-dashed border-indigo-200 rounded-xl flex items-center justify-center">
-                    <input id="inp-file" type="file" class="absolute inset-0 opacity-0 w-full h-full z-10">
-                    <span class="text-indigo-400 font-bold">📸 Click to Upload Photo</span>
+    <!-- SELL -->
+    <div id="view-sell" class="app-view hidden bg-white min-h-screen p-6">
+        <button onclick="showView('view-home')" class="mb-4 text-gray-500">⬅ Back</button><h2 class="text-2xl font-bold mb-6 text-gray-800">Sell Item</h2>
+        <form id="form-sell" onsubmit="submitSell(event)" class="space-y-4">
+            <div class="relative h-48 bg-slate-50 border-2 border-dashed border-indigo-200 rounded-2xl flex items-center justify-center overflow-hidden group">
+                <input id="inp-file" type="file" class="absolute inset-0 opacity-0 w-full h-full z-10 cursor-pointer">
+                <div class="text-center">
+                    <span class="text-4xl block mb-2 group-hover:scale-110 transition">📸</span>
+                    <span class="text-indigo-400 font-bold">Upload Photo</span>
                 </div>
-                <input name="name" class="w-full p-3 bg-slate-50 rounded-xl border outline-none focus:ring-2 ring-indigo-100" placeholder="Product Name" required>
-                <div class="flex gap-4">
-                    <input name="price" type="number" class="w-1/2 p-3 bg-slate-50 rounded-xl border outline-none" placeholder="Price ₹" required>
-                    <input name="category" class="w-1/2 p-3 bg-slate-50 rounded-xl border outline-none" placeholder="Category" required>
-                </div>
-                <textarea name="desc" class="w-full p-3 bg-slate-50 rounded-xl border outline-none" placeholder="Description..."></textarea>
-                <button class="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Post Ad</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- 6. ADD REQUEST -->
-    <div id="view-request-add" class="app-view hidden bg-white min-h-screen">
-        <div class="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-40">
-            <button onclick="showView('view-home')" class="p-2 rounded-full hover:bg-slate-100">⬅</button>
-            <h2 class="font-bold text-xl">Request Item</h2>
-        </div>
-        <div class="p-6 max-w-lg mx-auto">
-            <div class="bg-orange-50 text-orange-800 p-4 rounded-xl text-sm mb-6 border border-orange-100">
-                Kuch chahiye jo market mein nahi mil raha? Yahan post karein.
             </div>
-            <form id="form-request" onsubmit="submitRequest(event)" class="space-y-4">
-                <input id="req-name" class="w-full p-3 bg-slate-50 rounded-xl border outline-none focus:ring-2 ring-orange-100" placeholder="Item Name" required>
-                <textarea id="req-desc" class="w-full p-3 bg-slate-50 rounded-xl border outline-none focus:ring-2 ring-orange-100" placeholder="Details" required></textarea>
-                <button class="w-full py-4 bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-200">Post Request</button>
-            </form>
-        </div>
+            
+            <!-- AI BUTTONS -->
+            <div class="flex gap-2">
+                <button type="button" id="btn-magic-scan" onclick="magicScan()" class="btn-ai flex-1 py-3 rounded-xl text-sm font-bold shadow-lg shadow-purple-200">✨ AI Scan Image</button>
+            </div>
+
+            <input name="name" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:border-indigo-500 outline-none" placeholder="Product Name" required>
+            <div class="flex gap-4">
+                <input name="price" type="number" class="w-1/2 p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Price ₹" required>
+                <input name="category" class="w-1/2 p-4 border-2 border-gray-100 rounded-2xl bg-gray-50" placeholder="Category" required>
+            </div>
+            
+            <div class="relative">
+                <textarea name="desc" class="w-full p-4 border-2 border-gray-100 rounded-2xl bg-gray-50 h-32" placeholder="Description..."></textarea>
+                <button type="button" id="btn-ai-write" onclick="aiWriteDesc()" class="absolute bottom-3 right-3 text-xs bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">✨ Write AI</button>
+            </div>
+
+            <button id="btn-post-ad" class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg hover:bg-indigo-700">Post Ad</button>
+        </form>
     </div>
 
-    <!-- 7. DETAILS & CHAT -->
+    <!-- REQUEST ADD -->
+    <div id="view-request-add" class="app-view hidden bg-white min-h-screen p-6">
+        <button onclick="showView('view-home')" class="mb-4">⬅ Back</button><h2 class="text-2xl font-bold mb-4">Request Item</h2>
+        <form id="form-request" onsubmit="submitRequest(event)" class="space-y-4">
+            <input id="req-name" class="w-full p-4 border-2 rounded-2xl" placeholder="What do you need?" required>
+            <textarea id="req-desc" class="w-full p-4 border-2 rounded-2xl h-32" placeholder="Details" required></textarea>
+            <button class="w-full py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg">Post Request</button>
+        </form>
+    </div>
+
+    <!-- DETAILS -->
     <div id="view-details" class="app-view hidden bg-white min-h-screen pb-20">
-        <div class="relative h-72 bg-slate-900">
+        <div class="relative h-80 bg-slate-900">
             <img id="det-img" class="w-full h-full object-cover opacity-90">
             <button onclick="showView('view-home')" class="absolute top-4 left-4 bg-white/20 backdrop-blur p-2 rounded-full text-white hover:bg-white/40 transition-colors">⬅</button>
         </div>
-        <div class="max-w-3xl mx-auto -mt-6 relative bg-white rounded-t-3xl p-6 shadow-2xl">
+        <div class="max-w-3xl mx-auto -mt-10 relative bg-white rounded-t-[2.5rem] p-8 shadow-2xl">
             <div class="flex justify-between items-start mb-4">
-                <h2 id="det-title" class="text-2xl font-bold text-slate-800 w-2/3 leading-tight">Title</h2>
-                <p id="det-price" class="text-2xl font-bold text-indigo-600">₹0</p>
+                <h2 id="det-title" class="text-3xl font-bold text-slate-800 w-2/3 leading-tight"></h2>
+                <p id="det-price" class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-600"></p>
             </div>
-            <p id="det-desc" class="text-slate-600 leading-relaxed mb-6">Desc...</p>
-            <div class="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
-                <img id="det-seller-photo" class="w-12 h-12 rounded-full object-cover bg-white border">
+            <p id="det-desc" class="text-slate-600 leading-relaxed mb-8 text-lg"></p>
+
+            <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 mb-8 flex items-center gap-4">
+                <img id="det-seller-photo" class="w-14 h-14 rounded-full object-cover bg-white border-2 border-indigo-200">
                 <div>
-                    <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Owner</p>
-                    <p id="det-seller-name" class="font-bold text-slate-800">Name</p>
-                    <p id="det-seller-mobile" class="text-xs text-gray-500">Mobile Hidden</p>
+                    <p class="text-xs text-indigo-400 uppercase font-bold tracking-wider mb-1">Seller</p>
+                    <p id="det-seller-name" class="font-bold text-slate-900 text-lg"></p>
+                    <p id="det-seller-mobile" class="text-sm text-slate-600 font-medium"></p> <!-- Added this -->
+                    <p id="det-seller-bio" class="text-xs text-slate-500 italic"></p>
                 </div>
             </div>
+
             <div id="deal-controls" class="mb-8"></div>
+
             <div class="border-t pt-6">
-                <h3 class="font-bold text-lg mb-4 flex items-center gap-2">💬 Discussion</h3>
-                <div id="chat-messages" class="chat-box bg-slate-50 rounded-xl border border-slate-200 p-4 mb-4 overflow-y-auto shadow-inner"></div>
+                <h3 class="font-bold text-lg mb-4 flex items-center gap-2">💬 Chat</h3>
+                <div id="chat-messages" class="chat-box bg-slate-50 rounded-2xl border border-gray-100 p-4 mb-4 overflow-y-auto"></div>
                 <form onsubmit="sendChat(event)" class="flex gap-2">
-                    <input id="inp-chat" class="flex-1 p-3 bg-white border rounded-xl outline-none focus:ring-2 ring-indigo-100" placeholder="Type a message...">
-                    <button class="bg-indigo-600 text-white px-5 rounded-xl font-bold shadow-lg">Send</button>
+                    <input id="inp-chat" class="flex-1 p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-300" placeholder="Type message...">
+                    <button class="bg-indigo-600 text-white px-6 rounded-2xl font-bold shadow-lg">➤</button>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- 8. FULL PROFILE -->
-    <div id="view-profile-full" class="app-view hidden bg-white min-h-screen">
-        <div class="bg-indigo-600 p-6 text-white pt-10 pb-20 relative rounded-b-[2.5rem] shadow-xl">
-            <button onclick="showView('view-home')" class="absolute top-4 left-4 bg-white/20 p-2 rounded-full">⬅</button>
-            <div class="flex flex-col items-center">
-                <img id="prof-img" class="w-24 h-24 rounded-full border-4 border-white bg-white object-cover shadow-lg mb-3" src="">
-                <h2 id="prof-name" class="text-2xl font-bold">User</h2>
-                <p id="prof-mobile" class="text-indigo-200">Mobile</p>
+    <!-- CREATIVE PROFILE -->
+    <div id="view-profile-full" class="app-view hidden bg-gray-50 min-h-screen">
+        <!-- Creative Header -->
+        <div class="bg-theme p-6 pt-10 pb-32 rounded-b-[3rem] shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+            <div class="relative z-10 flex justify-between items-start text-white">
+                <button onclick="showView('view-home')" class="bg-white/20 p-2 rounded-full hover:bg-white/30">⬅</button>
+                <button onclick="handleLogout()" class="bg-red-500/80 px-4 py-1.5 rounded-full text-sm font-bold hover:bg-red-600">Logout</button>
+            </div>
+            <div class="flex flex-col items-center mt-4 relative z-10">
+                <div class="p-1 bg-white/30 rounded-full backdrop-blur-md">
+                    <img id="prof-img" class="w-28 h-28 rounded-full border-4 border-white bg-white object-cover shadow-lg">
+                </div>
+                <h2 id="prof-name" class="text-3xl font-bold text-white mt-3"></h2>
+                <p id="prof-bio" class="text-indigo-100 text-center mt-1 max-w-xs"></p>
+                <p id="prof-address" class="text-indigo-200 text-xs uppercase font-bold mt-2 tracking-widest bg-indigo-900/30 px-3 py-1 rounded-full"></p>
             </div>
         </div>
-        <div class="max-w-3xl mx-auto px-6 -mt-12">
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
-                <div class="flex justify-between items-start mb-4">
-                    <div><p class="text-gray-400 text-xs font-bold uppercase">Address</p><p id="prof-address" class="text-slate-800 font-medium mt-1">Address...</p></div>
+        
+        <!-- Stats Cards -->
+        <div class="max-w-3xl mx-auto px-6 -mt-20 relative z-20">
+            <div class="grid grid-cols-3 gap-2 mb-8">
+                <div class="bg-white p-3 rounded-2xl shadow-lg text-center">
+                    <p class="text-2xl font-bold text-indigo-600" id="stat-items">0</p>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase">Ads</p>
                 </div>
-                <button onclick="handleLogout()" class="w-full py-2 text-red-500 border border-red-100 rounded-lg text-sm font-bold hover:bg-red-50">Logout</button>
+                <div class="bg-white p-3 rounded-2xl shadow-lg text-center">
+                    <p class="text-2xl font-bold text-green-500" id="stat-sold">0</p>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase">Sold</p>
+                </div>
+                <div class="bg-white p-3 rounded-2xl shadow-lg text-center">
+                    <p class="text-2xl font-bold text-orange-500" id="stat-bought">0</p>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase">Bought</p>
+                </div>
             </div>
-            <h2 class="text-xl font-bold mb-4">My Deals</h2>
-            <div id="history-list" class="space-y-3 pb-10">
+
+            <div class="bg-white rounded-3xl shadow-sm p-6 min-h-[300px]">
+                <h2 class="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2">
+                    <span class="bg-indigo-100 text-indigo-600 p-1 rounded">📦</span> My Deals
+                </h2>
+                
                 <div id="sent-deals-area"></div>
+                <div class="my-6 border-t border-dashed border-gray-200"></div>
                 <div id="received-deals-area"></div>
             </div>
+            
+            <div class="h-20"></div>
         </div>
     </div>
 
